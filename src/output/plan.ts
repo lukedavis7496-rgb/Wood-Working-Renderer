@@ -2,7 +2,7 @@ import { getSpecies } from '../core/species';
 import type { Model, ProjectSpec } from '../core/types';
 import { FINISH_LABELS, JOINERY_LABELS } from '../core/types';
 import { formatBoardLength, formatDims, formatLength, type Unit } from '../core/units';
-import { buildModel } from '../projects/registry';
+import { buildModel, getProjectType } from '../projects/registry';
 import { cutList, finishedWeight, type CutListRow } from './cutList';
 import { planLumber, type LumberPlan, type StockGroup } from './stock';
 
@@ -11,17 +11,33 @@ export interface ProjectPlan {
   cutList: CutListRow[];
   lumber: LumberPlan;
   shoppingList: string[];
+  /** Priced hardware (e.g. steel legs), USD. */
+  hardwareCost: number;
+  /** Lumber + priced hardware, USD. */
+  totalCost: number;
   weightLb: number;
 }
 
 export function plan(spec: ProjectSpec): ProjectPlan {
   const model = buildModel(spec);
   const lumber = planLumber(model);
+  const u = model.spec.units;
+  const priced = model.hardware.filter((h) => h.unitCost);
+  const hardwareCost = priced.reduce((s, h) => s + h.quantity * h.unitCost!, 0);
+  const owned = model.parts.filter((p) => p.sourcing === 'owned');
+  const shoppingList = [
+    ...owned.map((p) => `${p.name}: you have it — nothing to buy for the top.`),
+    ...lumber.groups.map((g) => shoppingLine(g, u)),
+    ...priced.map((h) => `${count(h.quantity)} ${h.item.charAt(0).toLowerCase()}${h.item.slice(1)} (~$${Math.round(h.quantity * h.unitCost!)}).`),
+  ];
+  if (!shoppingList.length) shoppingList.push('No lumber to buy.');
   return {
     model,
     cutList: cutList(model),
     lumber,
-    shoppingList: lumber.groups.map((g) => shoppingLine(g, model.spec.units)),
+    shoppingList: shoppingList.map((l) => l.charAt(0).toUpperCase() + l.slice(1)),
+    hardwareCost,
+    totalCost: lumber.totals.cost + hardwareCost,
     weightLb: finishedWeight(model),
   };
 }
@@ -36,6 +52,7 @@ function joinWords(items: string[]): string {
 
 function plural(name: string): string {
   const base = name.replace(/ \(.*\)$/, '').toLowerCase();
+  if (base.endsWith('foot')) return `${base.slice(0, -4)}feet`;
   return base.endsWith('s') ? base : `${base}s`;
 }
 
@@ -62,10 +79,12 @@ export function formatPlan(p: ProjectPlan): string {
   const hr = () => lines.push('');
 
   const d = s.dimensions;
+  const style = String(s.options.tableStyle ?? '');
   lines.push(
-    `${s.projectType.toUpperCase()} — ${formatLength(d.length, u)} L × ${formatLength(d.width, u)} W × ${formatLength(d.height, u)} H`,
+    `${s.projectType.toUpperCase()}${style ? ` (${style})` : ''} — ${formatLength(d.length, u)} L × ${formatLength(d.width, u)} W × ${formatLength(d.height, u)} H`,
   );
-  lines.push(`${species.name} · ${JOINERY_LABELS[s.joinery]} · ${FINISH_LABELS[s.finish]}`);
+  const joineryApplies = getProjectType(s.projectType).joineryApplies?.(s.options) ?? true;
+  lines.push([species.name, ...(joineryApplies ? [JOINERY_LABELS[s.joinery]] : []), FINISH_LABELS[s.finish]].join(' · '));
   hr();
 
   if (model.warnings.length) {
@@ -88,12 +107,15 @@ export function formatPlan(p: ProjectPlan): string {
   lines.push('LUMBER SHOPPING LIST');
   for (const l of p.shoppingList) lines.push(`  • ${l}`);
   const t = p.lumber.totals;
-  lines.push(
-    `  Total: ~${t.recommendedBoardFeet.toFixed(1)} bd ft ` +
-      `(${t.netBoardFeet.toFixed(1)} in parts, ${t.packedBoardFeet.toFixed(1)} after kerf ${formatLength(p.lumber.settings.kerf, u)} and trim, ` +
-      `+${Math.round(p.lumber.settings.overage * 100)}% for defects and mistakes)`,
-  );
-  lines.push(`  Estimated lumber cost: ~$${Math.round(t.cost)} (regional prices vary widely)`);
+  if (p.lumber.groups.length) {
+    lines.push(
+      `  Total: ~${t.recommendedBoardFeet.toFixed(1)} bd ft ` +
+        `(${t.netBoardFeet.toFixed(1)} in parts, ${t.packedBoardFeet.toFixed(1)} after kerf ${formatLength(p.lumber.settings.kerf, u)} and trim, ` +
+        `+${Math.round(p.lumber.settings.overage * 100)}% for defects and mistakes)`,
+    );
+    lines.push(`  Estimated lumber cost: ~$${Math.round(t.cost)} (regional prices vary widely)`);
+  }
+  if (p.hardwareCost) lines.push(`  Steel legs and priced hardware: ~$${Math.round(p.hardwareCost)}`);
   lines.push(`  Finished weight: ~${Math.round(p.weightLb)} lb`);
   hr();
 

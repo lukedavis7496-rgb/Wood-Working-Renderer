@@ -1,6 +1,6 @@
 import { normalizeSpec } from '../core/spec';
 import type { Model, ProjectSpec, ProjectType } from '../core/types';
-import { table } from './table';
+import { table } from './table/index';
 
 /**
  * Register new project types here. Each one supplies its option schema,

@@ -1,19 +1,35 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { HEXA_FACES, handedness, toWorld, type Hexa, type Placement } from '../core/geom';
+import { HEXA_FACES, handedness, toWorld, type Hexa, type Placement, type Vec3 } from '../core/geom';
 import { getSpecies } from '../core/species';
 import type { Finish, Model, Part } from '../core/types';
 
-/** Builds triangle soup (flat-shaded) for a set of hexahedra in world space. */
+/**
+ * Builds triangle soup (flat-shaded) for a set of hexahedra in world space.
+ * Faces two solids share (segments of a slab, wedges of a round) are inside
+ * the part, so they're dropped: no hidden triangles and no seam lines.
+ */
 function hexaGeometry(hexas: Hexa[], placement: Placement): THREE.BufferGeometry {
   const flip = handedness(placement) < 0;
-  const pos: number[] = [];
+  const faces: { key: string; pts: Vec3[] }[] = [];
+  const counts = new Map<string, number>();
   for (const h of hexas) {
     const w = h.map((p) => toWorld(placement, p));
     for (const [a, b, c, d] of HEXA_FACES) {
-      const tris = flip ? [a, c, b, a, d, c] : [a, b, c, a, c, d];
-      for (const i of tris) pos.push(...w[i]);
+      const pts = [w[a], w[b], w[c], w[d]];
+      const key = pts
+        .map((p) => p.map((v) => v.toFixed(4)).join(','))
+        .sort()
+        .join('|');
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      faces.push({ key, pts });
     }
+  }
+  const pos: number[] = [];
+  for (const { key, pts } of faces) {
+    if (counts.get(key)! > 1) continue;
+    const tris = flip ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3];
+    for (const i of tris) pos.push(...pts[i]);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -24,7 +40,7 @@ function hexaGeometry(hexas: Hexa[], placement: Placement): THREE.BufferGeometry
 function finishColor(base: string, finish: Finish): THREE.Color {
   const c = new THREE.Color(base);
   if (finish === 'paint') return new THREE.Color('#e8e3d8');
-  if (finish === 'oil') return c.offsetHSL(0, 0.05, -0.06);
+  if (finish === 'oil') return c.offsetHSL(0, 0.05, -0.02);
   if (finish === 'stain') return c.offsetHSL(0, 0.08, -0.14);
   return c.offsetHSL(0, -0.04, 0.04);
 }
@@ -65,7 +81,7 @@ export class Viewer {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
 
-    this.scene.add(new THREE.HemisphereLight('#fff8ee', '#5a4a3a', 1.6));
+    this.scene.add(new THREE.HemisphereLight('#fff8ee', '#8a7a6a', 2.2));
     const sun = new THREE.DirectionalLight('#ffffff', 1.8);
     sun.position.set(60, 120, 80);
     this.scene.add(sun);
@@ -98,11 +114,13 @@ export class Viewer {
 
     const all = new THREE.Box3();
     model.parts.forEach((part, i) => {
-      const base = finishColor(getSpecies(part.species).color, model.spec.finish);
+      const steel = part.material === 'steel';
+      const base = steel ? new THREE.Color('#34373b') : finishColor(getSpecies(part.species).color, model.spec.finish);
       const bodyMaterial = new THREE.MeshStandardMaterial({
-        color: base.clone().offsetHSL(0, 0, ((i % 3) - 1) * 0.025),
-        roughness: model.spec.finish === 'paint' ? 0.5 : 0.75,
-        flatShading: true,
+        color: steel ? base : base.clone().offsetHSL(0, 0, ((i % 3) - 1) * 0.025),
+        roughness: steel ? 0.45 : model.spec.finish === 'paint' ? 0.5 : 0.75,
+        metalness: steel ? 0.6 : 0,
+        flatShading: !steel,
       });
       const tenonMaterial = new THREE.MeshStandardMaterial({ color: base.clone().offsetHSL(0, 0, 0.12), roughness: 0.8, flatShading: true });
       const group = new THREE.Group();

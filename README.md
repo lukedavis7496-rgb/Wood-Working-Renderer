@@ -3,8 +3,18 @@
 Turn a woodworking project spec into a **parametric 3D model**, a **cut list**,
 a **lumber shopping list** with board feet and cost, and an **assembly order**.
 
-Supported now: **tables** (straight or tapered legs; mortise & tenon, dowel or
-pocket-screw aprons; glued-up top). Bookshelves, cabinets and benches are next.
+Supported now: **tables** in three styles:
+
+- **Classic**: square or tapered legs, mortise & tenon / dowel / pocket-screw
+  aprons, top glued up from boards.
+- **Live edge**: your own slab (widest and narrow-end width, current length
+  and thickness) on bought steel legs (U, trapezoid, X or hairpin). The slab
+  isn't on the lumber list; the plan covers flattening, trimming and stabilising it.
+- **Round**: glued-up top cut to a circle (each board only as long as the
+  chord it spans) or your own round slab, on a pedestal (laminated column,
+  half-lapped feet and cleats) or four legs with aprons.
+
+Bookshelves, cabinets and benches are next.
 The spec and the project-type registry are built so they slot in without
 touching the core.
 
@@ -32,7 +42,7 @@ npm run build:artifact                        # single-file page (three.js from 
 
 | Field | Values |
 |---|---|
-| `projectType` | `table` |
+| `projectType` | `table` (style via `options.tableStyle`: `classic`, `live-edge`, `round`) |
 | `units` | `in` or `mm` (all lengths, including length options, use this unit) |
 | `dimensions` | overall finished length × width × height |
 | `species` | `red-oak`, `white-oak`, `walnut`, `hard-maple`, `soft-maple`, `cherry`, `ash`, `poplar`, `pine` |
@@ -41,9 +51,14 @@ npm run build:artifact                        # single-file page (three.js from 
 | `options` | type-specific, all optional, with recommended defaults (see below) |
 | `stock` | optional `{ "kerf": 0.125, "overage": 0.15 }` |
 
-Table options: `legStyle` (`straight`/`tapered`), `legThickness`,
-`taperFootSize`, `taperStart` (below the apron), `apronInset`, `apronWidth`,
-`apronThickness`, `topThickness`, `overhang`, `maxTopBoardWidth`, `tenonLength`.
+Table options: `tableStyle`; classic/four-leg base: `legStyle`
+(`straight`/`tapered`), `legThickness`, `taperFootSize`, `taperStart`,
+`apronInset`, `apronWidth`, `apronThickness`, `tenonLength`, `overhang`;
+board tops: `topThickness`, `maxTopBoardWidth`; slabs: `narrowWidth`,
+`slabLength`, `slabThickness`, `flattenAllowance`; steel legs: `steelLegStyle`,
+`steelLegInset`, `steelLegWidth`, `steelTubeSize`; round: `roundTop`
+(`boards`/`slab`), `roundBase` (`pedestal`/`four-legs`), `columnSize`, `footSpan`.
+For round tables `dimensions.length` is the diameter. See `examples/` for each style.
 The species is never a dimension: it drives weight, cost and how the lumber is
 sold (rough hardwood in quarters vs. surfaced softwood in nominal sizes).
 
@@ -95,7 +110,8 @@ weight and the 3D view all work from the parts automatically.
 
 ```
 src/core/       units, geometry, species data, spec types + normalisation
-src/projects/   project types (table) and the registry
+src/projects/   project types and the registry; table/ holds the styles,
+                bases (apron, pedestal, steel legs) and tops (boards, round, slabs)
 src/output/     cut list, lumber planning/packing, report
 src/ui/         browser app (form, Three.js viewer, outputs)
 src/cli.ts      terminal report
@@ -107,6 +123,8 @@ test/           vitest suites
 - Shelving (fixed/adjustable shelves, dados, back panel) and cabinets (doors,
   drawers, overlay)
 - Bench
+- Three-leg round bases (angled joinery), wood trestle bases for slabs
+- Bookmatched slabs with an epoxy river
 - Mitred tenons for longer tenons in thin legs
 - Printable / PDF cut sheets
 - Cutting diagrams that mix board sizes (e.g. a wider board for the top)

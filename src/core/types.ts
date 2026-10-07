@@ -50,6 +50,8 @@ interface OptionBase {
   key: string;
   label: string;
   help?: string;
+  /** Show near the top of forms, with the main choices (e.g. a style that changes everything else). */
+  prominent?: boolean;
   /** Only show this field in forms when the predicate holds (it still resolves to its default). */
   showIf?: (options: Record<string, unknown>, joinery: Joinery) => boolean;
 }
@@ -104,6 +106,10 @@ export interface Part {
   allowance?: { length: number; width: number; reason: string };
   /** Shaping/machining notes that don't change the blank size (tapers, mortises). */
   notes: string[];
+  /** Bought steel parts are shown in the model but aren't cut or planned as lumber. */
+  material?: 'wood' | 'steel';
+  /** 'owned': material the maker already has (e.g. their slab) — not on the lumber list. */
+  sourcing?: 'owned';
 }
 
 export interface Joint {
@@ -116,6 +122,8 @@ export interface HardwareItem {
   item: string;
   quantity: number;
   note?: string;
+  /** Rough price each, USD, for items worth costing (e.g. steel legs). */
+  unitCost?: number;
 }
 
 /** A glue-up or sub-assembly that isn't a single cut piece (e.g. a tabletop panel). */
@@ -143,6 +151,14 @@ export interface ProjectType {
   /** Typical sizes, for UI hints and defaults (inches). */
   defaultDimensions: { length: number; width: number; height: number };
   options: OptionField[];
+  /**
+   * Labels for the overall dimensions given the resolved options. A null
+   * width means the shape has one plan dimension (e.g. a round top's
+   * diameter); width is then set equal to length.
+   */
+  dimensionLabels?: (options: Record<string, unknown>) => { length: string; width: string | null; height: string };
+  /** False when the joinery choice doesn't apply to these options (e.g. bought steel legs). */
+  joineryApplies?: (options: Record<string, unknown>) => boolean;
   /** Extra validation beyond the schema; return error messages. Lengths in inches. */
   validate?: (spec: NormalizedSpec) => string[];
   build: (spec: NormalizedSpec) => Model;

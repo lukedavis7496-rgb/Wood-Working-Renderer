@@ -43,6 +43,8 @@ export interface CutListRow {
   size: CutSize;
   notes: string[];
   allowanceReason?: string;
+  /** The maker already has this piece (e.g. their slab). */
+  owned: boolean;
 }
 
 const key = (p: Part, s: CutSize) =>
@@ -51,6 +53,7 @@ const key = (p: Part, s: CutSize) =>
 export function cutList(model: Model): CutListRow[] {
   const rows = new Map<string, CutListRow>();
   for (const part of model.parts) {
+    if (part.material === 'steel') continue;
     const size = cutSize(part);
     const k = key(part, size);
     const row = rows.get(k);
@@ -67,13 +70,21 @@ export function cutList(model: Model): CutListRow[] {
         size,
         notes: part.notes,
         allowanceReason: part.allowance?.reason,
+        owned: part.sourcing === 'owned',
       });
     }
   }
   return [...rows.values()];
 }
 
-/** Finished weight in pounds. */
+const STEEL_LB_PER_FT3 = 490;
+/** Steel legs are hollow tube: roughly a quarter of the solid section is metal. */
+const TUBE_FILL = 0.25;
+
+/** Finished weight in pounds, wood and steel. */
 export function finishedWeight(model: Model): number {
-  return model.parts.reduce((w, p) => w + (finishedVolume(p) / 1728) * getSpecies(p.species).densityLbPerFt3, 0);
+  return model.parts.reduce((w, p) => {
+    const density = p.material === 'steel' ? STEEL_LB_PER_FT3 * TUBE_FILL : getSpecies(p.species).densityLbPerFt3;
+    return w + (finishedVolume(p) / 1728) * density;
+  }, 0);
 }

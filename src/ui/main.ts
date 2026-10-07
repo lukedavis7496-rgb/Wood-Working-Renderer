@@ -111,9 +111,8 @@ function renderForm(): void {
   const type = getProjectType(state.projectType);
   const unitLabel = state.units === 'mm' ? 'mm' : 'in';
   const resolved = (current?.model.spec.options ?? {}) as Record<string, unknown>;
-  const opts = type.options
-    .filter((f) => optionVisible(f, { ...resolved, ...nonEmpty(state.options) }, state.joinery))
-    .map((f) => {
+  const merged = { ...resolved, ...nonEmpty(state.options) };
+  const optionField = (f: OptionField) => {
       const v = state.options[f.key] ?? '';
       if (f.kind === 'select') {
         const def = typeof resolved[f.key] === 'string' ? resolved[f.key] : '';
@@ -128,8 +127,12 @@ function renderForm(): void {
         `<input type="number" step="${step}" min="0" name="opt:${f.key}" value="${esc(v)}" placeholder="${esc(optionPlaceholder(f))}">`,
         f.help,
       );
-    })
-    .join('');
+  };
+  const visible = type.options.filter((f) => optionVisible(f, merged, state.joinery));
+  const prominent = visible.filter((f) => f.prominent).map(optionField).join('');
+  const opts = visible.filter((f) => !f.prominent).map(optionField).join('');
+  const labels = type.dimensionLabels?.(merged) ?? { length: 'Length', width: 'Width', height: 'Height' };
+  const joineryApplies = type.joineryApplies?.(merged) ?? true;
 
   const typeChoices = [
     ...Object.values(PROJECT_TYPES).map((t) => ({ value: t.id, label: t.label })),
@@ -145,14 +148,19 @@ function renderForm(): void {
     <fieldset>
       <legend>Project</legend>
       ${field('Project type', selectHtml('projectType', state.projectType, typeChoices))}
+      ${prominent}
       ${field('Units', selectHtml('units', state.units, [{ value: 'in', label: 'Inches' }, { value: 'mm', label: 'Millimetres' }]))}
-      <div class="dims">
-        ${field(`Length (${unitLabel})`, `<input type="number" min="0" step="any" name="length" value="${esc(state.length)}">`)}
-        ${field(`Width (${unitLabel})`, `<input type="number" min="0" step="any" name="width" value="${esc(state.width)}">`)}
-        ${field(`Height (${unitLabel})`, `<input type="number" min="0" step="any" name="height" value="${esc(state.height)}">`)}
+      <div class="dims${labels.width === null ? ' two' : ''}">
+        ${field(`${labels.length} (${unitLabel})`, `<input type="number" min="0" step="any" name="length" value="${esc(state.length)}">`)}
+        ${labels.width === null ? '' : field(`${labels.width} (${unitLabel})`, `<input type="number" min="0" step="any" name="width" value="${esc(state.width)}">`)}
+        ${field(`${labels.height} (${unitLabel})`, `<input type="number" min="0" step="any" name="height" value="${esc(state.height)}">`)}
       </div>
       ${field('Wood species', selectHtml('species', state.species, Object.values(SPECIES).map((s) => ({ value: s.id, label: s.name }))))}
-      ${field('Joinery', selectHtml('joinery', state.joinery, joineryChoices))}
+      ${
+        joineryApplies
+          ? field('Joinery', selectHtml('joinery', state.joinery, joineryChoices))
+          : field('Joinery', '<select name="joinery" disabled><option>Not needed for this base</option></select>', 'The base is screwed together and to the top.')
+      }
     </fieldset>
     <fieldset>
       <legend>${esc(type.label)} details</legend>
@@ -232,9 +240,10 @@ function renderOutputs(p: ProjectPlan): void {
   const u = p.model.spec.units;
   const t = p.lumber.totals;
 
+  const owned = p.cutList.some((r) => r.owned);
   $('#summary').innerHTML = `
-    <div class="stat"><span>Lumber to buy</span><strong>~${t.recommendedBoardFeet.toFixed(1)} bd ft</strong></div>
-    <div class="stat"><span>Est. lumber cost</span><strong>~$${Math.round(t.cost)}</strong></div>
+    <div class="stat"><span>Lumber to buy</span><strong>${p.lumber.groups.length ? `~${t.recommendedBoardFeet.toFixed(1)} bd ft` : 'None'}</strong>${owned ? '<small>plus your slab</small>' : ''}</div>
+    <div class="stat"><span>Est. cost</span><strong>~$${Math.round(p.totalCost)}</strong>${p.hardwareCost ? `<small>incl. ~$${Math.round(p.hardwareCost)} steel legs</small>` : ''}</div>
     <div class="stat"><span>Pieces</span><strong>${p.model.parts.length}</strong></div>
     <div class="stat"><span>Finished weight</span><strong>~${Math.round(p.weightLb)} lb</strong></div>`;
 
@@ -248,7 +257,7 @@ function renderOutputs(p: ProjectPlan): void {
         .map(
           (r) => `<tr>
             <td class="num">${r.quantity}</td>
-            <td>${esc(r.name)}</td>
+            <td>${esc(r.name)}${r.owned ? ' <span class="chip">yours</span>' : ''}</td>
             <td class="num">${formatLength(r.size.thickness, u)}</td>
             <td class="num">${formatLength(r.size.width, u)}</td>
             <td class="num">${formatLength(r.size.length, u)}</td>
@@ -263,7 +272,7 @@ function renderOutputs(p: ProjectPlan): void {
 
   $('#tab-shopping').innerHTML = `
     <ul class="shopping">${p.shoppingList.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
-    <table class="compact">
+    ${p.lumber.groups.length ? `<table class="compact">
       <thead><tr><th>Stock</th><th>Boards</th><th>In parts</th><th>With kerf &amp; trim</th><th>To buy (+${Math.round(p.lumber.settings.overage * 100)}%)</th><th>Est. cost</th></tr></thead>
       <tbody>${p.lumber.groups
         .map(
@@ -274,7 +283,7 @@ function renderOutputs(p: ProjectPlan): void {
         <tr class="total"><td>Total (bd ft)</td><td></td><td class="num">${t.netBoardFeet.toFixed(1)}</td><td class="num">${t.packedBoardFeet.toFixed(1)}</td><td class="num">${t.recommendedBoardFeet.toFixed(1)}</td><td class="num">$${Math.round(t.cost)}</td></tr>
       </tbody>
     </table>
-    <p class="hint">Saw kerf ${formatLength(p.lumber.settings.kerf, u)}. Rough boards lose 1/4″ in thickness and 1/2″ in width to milling, plus 1″ at each end to checks and snipe. Prices are rough US averages.</p>
+    <p class="hint">Saw kerf ${formatLength(p.lumber.settings.kerf, u)}. Rough boards lose 1/4″ in thickness and 1/2″ in width to milling, plus 1″ at each end to checks and snipe. Prices are rough US averages.</p>` : ''}
     <h3>Hardware</h3>
     <ul>${p.model.hardware.map((h) => `<li>${h.quantity} × ${esc(h.item)}${h.note ? ` <span class="hint">— ${esc(h.note)}</span>` : ''}</li>`).join('')}</ul>`;
 
@@ -284,6 +293,7 @@ function renderOutputs(p: ProjectPlan): void {
 }
 
 function cuttingDiagrams(p: ProjectPlan): string {
+  if (!p.lumber.groups.length) return '<p class="hint">Nothing to cut from bought lumber for this design.</p>';
   const maxLen = Math.max(...p.lumber.groups.map((g) => g.board.length));
   const scale = 8; // px per inch in viewBox units; SVG scales to container width
   return p.lumber.groups

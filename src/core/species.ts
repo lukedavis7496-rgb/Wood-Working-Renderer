@@ -25,7 +25,7 @@ export interface Species {
 export const SPECIES: Record<string, Species> = {
   'red-oak': { id: 'red-oak', name: 'Red oak', densityLbPerFt3: 44, pricePerBoardFoot: 6, soldAs: 'rough', blotchy: false, color: '#c4986a' },
   'white-oak': { id: 'white-oak', name: 'White oak', densityLbPerFt3: 47, pricePerBoardFoot: 9, soldAs: 'rough', blotchy: false, color: '#b8a07a' },
-  walnut: { id: 'walnut', name: 'Black walnut', densityLbPerFt3: 38, pricePerBoardFoot: 14, soldAs: 'rough', blotchy: false, color: '#5c4033' },
+  walnut: { id: 'walnut', name: 'Black walnut', densityLbPerFt3: 38, pricePerBoardFoot: 14, soldAs: 'rough', blotchy: false, color: '#7a5640' },
   'hard-maple': { id: 'hard-maple', name: 'Hard maple', densityLbPerFt3: 44, pricePerBoardFoot: 7.5, soldAs: 'rough', blotchy: true, color: '#e3cfa8' },
   'soft-maple': { id: 'soft-maple', name: 'Soft maple', densityLbPerFt3: 38, pricePerBoardFoot: 5.5, soldAs: 'rough', blotchy: true, color: '#dcc49c' },
   cherry: { id: 'cherry', name: 'Cherry', densityLbPerFt3: 35, pricePerBoardFoot: 9, soldAs: 'rough', blotchy: true, color: '#a8664a' },

@@ -108,6 +108,9 @@ legend { font-weight: 650; font-size: 12px; text-transform: uppercase; letter-sp
 }
 .field input:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .dims { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.dims.two { grid-template-columns: repeat(2, 1fr); }
+.chip { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+.stat small { display: block; color: var(--muted); font-size: 12px; }
 details summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
 #reference-preview { max-width: 100%; border-radius: var(--radius); border: 1px solid var(--border); }
 

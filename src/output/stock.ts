@@ -154,6 +154,7 @@ export function planLumber(model: Model): LumberPlan {
   const { kerf, overage } = model.spec.stock;
   const byGroup = new Map<string, { species: Species; stock: StockThickness; pieces: Piece[] }>();
   for (const part of model.parts) {
+    if (part.material === 'steel' || part.sourcing === 'owned') continue;
     const species = getSpecies(part.species);
     const size = cutSize(part);
     const stock = stockThicknessFor(size.thickness, species);

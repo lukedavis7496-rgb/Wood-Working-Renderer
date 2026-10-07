@@ -1,0 +1,9 @@
+{
+  "projectType": "table",
+  "units": "in",
+  "dimensions": { "length": 24, "width": 24, "height": 24 },
+  "species": "white-oak",
+  "joinery": "mortise-tenon",
+  "options": { "tableStyle": "round", "roundBase": "pedestal" },
+  "finish": "oil"
+}

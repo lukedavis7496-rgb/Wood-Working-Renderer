@@ -109,7 +109,13 @@ export function normalizeSpec(spec: ProjectSpec, type: ProjectType): { spec: Nor
     width: toInches(d.width, units),
     height: toInches(d.height, units),
   };
-  const options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery }, problems, warnings);
+  let options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery }, problems, warnings);
+  // Single plan dimension (round): width follows length, and defaults that
+  // depend on width are resolved again.
+  if (type.dimensionLabels?.(options).width === null && dimensions.width !== dimensions.length) {
+    dimensions.width = dimensions.length;
+    options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery }, problems, []);
+  }
 
   const kerf = spec.stock?.kerf !== undefined ? toInches(spec.stock.kerf, units) : DEFAULT_KERF_IN;
   const overage = spec.stock?.overage ?? DEFAULT_OVERAGE;
