@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Woodworking Planner</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect x=%224%22 y=%229%22 width=%2224%22 height=%224%22 fill=%22%239a5b2e%22/%3E%3Crect x=%226%22 y=%2213%22 width=%223%22 height=%2214%22 fill=%22%239a5b2e%22/%3E%3Crect x=%2223%22 y=%2213%22 width=%223%22 height=%2214%22 fill=%22%239a5b2e%22/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Woodworking Planner</h1>
+      <div class="topbar-actions">
+        <button id="download-spec" type="button">Download spec</button>
+        <button id="reset-form" type="button">Reset</button>
+      </div>
+    </header>
+    <main class="layout">
+      <aside class="sidebar">
+        <form id="form" autocomplete="off" onsubmit="return false"></form>
+      </aside>
+      <section class="content">
+        <div id="errors" class="errors" role="alert" hidden></div>
+        <div class="viewer-wrap">
+          <div id="viewer" class="viewer"></div>
+          <div id="tooltip" class="tooltip" hidden></div>
+          <div class="viewer-toolbar">
+            <label>Explode <input id="explode" type="range" min="0" max="100" value="0" /></label>
+            <label><input id="xray" type="checkbox" /> X-ray joinery</label>
+            <button id="reset-view" type="button">Reset view</button>
+          </div>
+        </div>
+        <div id="summary" class="summary"></div>
+        <ul id="warnings" class="warnings" hidden></ul>
+        <nav class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" aria-controls="tab-cut">Cut list</button>
+          <button role="tab" aria-selected="false" aria-controls="tab-shopping">Shopping list</button>
+          <button role="tab" aria-selected="false" aria-controls="tab-diagram">Cutting diagrams</button>
+          <button role="tab" aria-selected="false" aria-controls="tab-assembly">Assembly order</button>
+        </nav>
+        <div id="tab-cut" role="tabpanel"></div>
+        <div id="tab-shopping" role="tabpanel" hidden></div>
+        <div id="tab-diagram" role="tabpanel" hidden></div>
+        <div id="tab-assembly" role="tabpanel" hidden></div>
+      </section>
+    </main>
+    <script type="module" src="/src/ui/main.ts"></script>
+  </body>
+</html>
