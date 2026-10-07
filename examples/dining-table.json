@@ -1,0 +1,9 @@
+{
+  "projectType": "table",
+  "units": "in",
+  "dimensions": { "length": 60, "width": 36, "height": 30 },
+  "species": "red-oak",
+  "joinery": "mortise-tenon",
+  "options": { "legStyle": "tapered" },
+  "finish": "oil"
+}

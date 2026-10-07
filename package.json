@@ -1,0 +1,25 @@
+{
+  "name": "wood-working-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Turn a woodworking project spec into a parametric 3D model, cut list, lumber shopping list and assembly order.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "plan": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/three": "^0.186.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}
