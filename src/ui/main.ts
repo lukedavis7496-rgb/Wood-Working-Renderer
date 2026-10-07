@@ -356,13 +356,20 @@ $('#reset-form').addEventListener('click', () => {
   state = defaultState();
   update(true);
 });
-$('#download-spec').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify({ ...toSpec(state), referenceImage: undefined }, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${state.projectType}-spec.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+$('#copy-spec').addEventListener('click', async () => {
+  const json = JSON.stringify({ ...toSpec(state), referenceImage: undefined }, null, 2);
+  const status = $('#copy-status');
+  try {
+    await navigator.clipboard.writeText(json);
+    status.textContent = 'Spec copied';
+  } catch {
+    const box = $('#spec-json') as HTMLTextAreaElement;
+    box.value = json;
+    box.hidden = false;
+    box.select();
+    status.textContent = 'Select and copy the spec below';
+  }
+  window.setTimeout(() => (status.textContent = ''), 4000);
 });
 
 const form = $('#form');

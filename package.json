@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "plan": "tsx src/cli.ts"
+    "plan": "tsx src/cli.ts",
+    "build:artifact": "node scripts/build-artifact.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

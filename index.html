@@ -10,13 +10,15 @@
     <header class="topbar">
       <h1>Woodworking Planner</h1>
       <div class="topbar-actions">
-        <button id="download-spec" type="button">Download spec</button>
+        <span id="copy-status" class="copy-status" aria-live="polite"></span>
+        <button id="copy-spec" type="button" title="Copy your settings as JSON, for npm run plan">Copy spec</button>
         <button id="reset-form" type="button">Reset</button>
       </div>
     </header>
     <main class="layout">
       <aside class="sidebar">
         <form id="form" autocomplete="off" onsubmit="return false"></form>
+        <textarea id="spec-json" class="spec-json" rows="12" readonly hidden></textarea>
       </aside>
       <section class="content">
         <div id="errors" class="errors" role="alert" hidden></div>

@@ -13,6 +13,7 @@ npm install
 npm run dev                                   # browser app with 3D viewer
 npm run plan -- examples/dining-table.json    # text report in the terminal
 npm test                                      # geometry + lumber math tests
+npm run build:artifact                        # single-file page (three.js from CDN)
 ```
 
 ## Input spec
