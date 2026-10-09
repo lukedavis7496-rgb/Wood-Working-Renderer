@@ -1,0 +1,9 @@
+{
+  "projectType": "table",
+  "units": "mm",
+  "dimensions": { "length": 600, "width": 450, "height": 550 },
+  "species": "pine",
+  "joinery": "pocket-screw",
+  "options": { "legStyle": "straight", "legThickness": 38 },
+  "finish": "paint"
+}

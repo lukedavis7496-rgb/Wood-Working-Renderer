@@ -1,0 +1,9 @@
+{
+  "projectType": "bookshelf",
+  "units": "in",
+  "dimensions": { "length": 36, "width": 12, "height": 72 },
+  "species": "white-oak",
+  "joinery": "dado",
+  "options": { "shelfType": "adjustable", "shelfCount": 4 },
+  "finish": "oil"
+}
