@@ -12,7 +12,10 @@ describe('stock thickness', () => {
     expect(stockThicknessFor(0.75, oak).label).toBe('4/4');
     expect(stockThicknessFor(1, oak).label).toBe('5/4');
     expect(stockThicknessFor(1.75, oak).label).toBe('8/4');
-    expect(stockThicknessFor(1.8, oak).label).toBe('9/4');
+    // 9/4 isn't stocked: round up to the next thickness yards carry
+    expect(stockThicknessFor(1.8, oak).label).toBe('10/4');
+    expect(stockThicknessFor(2.5, oak).label).toBe('12/4');
+    expect(() => stockThicknessFor(4, oak)).toThrow(/laminate/);
   });
   it('maps softwood to surfaced nominal sizes', () => {
     const pine = getSpecies('pine');
@@ -75,7 +78,7 @@ describe('lumber plan for the dining table', () => {
     const legs = p.lumber.groups[0];
     // four 29″ legs: two strips of two legs on a 5″ (4-1/2″ usable) × 6′ board
     expect(legs.boards).toHaveLength(1);
-    expect(legs.board).toMatchObject({ width: 5, length: 72 });
+    expect(legs.boards[0].size).toMatchObject({ width: 5, length: 72 });
     expect(legs.boardFeet.packed).toBeCloseTo((2 * 5 * 72) / 144);
   });
 
@@ -100,5 +103,54 @@ describe('formatInches', () => {
     expect(formatInches(0.9375)).toBe('15/16″');
     expect(formatInches(12)).toBe('12″');
     expect(formatInches(56.375)).toBe('56-3/8″');
+  });
+});
+
+describe('board sizing', () => {
+  const long = plan({
+    projectType: 'table',
+    units: 'in',
+    dimensions: { length: 130, width: 44, height: 30 },
+    species: 'white-oak',
+    joinery: 'mortise-tenon',
+    options: { legStyle: 'straight', legThickness: 2.5 },
+  });
+
+  it('sources a 10′+ top from 12′ boards', () => {
+    const top = long.lumber.groups.find((g) => g.purposes.includes('Top board (glue-up)'))!;
+    expect(top.boards.every((b) => b.size.length === 144)).toBe(true);
+  });
+
+  it('sizes each board to what it carries, so the last board can be smaller', () => {
+    const aprons = long.lumber.groups.find((g) => g.stock.label === '4/4')!;
+    const lengths = aprons.boards.map((b) => b.size.length).sort((a, b) => a - b);
+    expect(lengths).toEqual([96, 144, 144]);
+    for (const b of aprons.boards) for (const pl of b.placements) expect(pl.x + pl.length).toBeLessThanOrEqual(b.size.usableLength + 1e-9);
+    expect(long.shoppingList.some((l) => /two boards at least 5″ wide × 12′ long and one at least 5″ × 8′/.test(l))).toBe(true);
+  });
+
+  it('prefers 6′ boards to 12′ boards when they use the same wood', () => {
+    const dining = plan({
+      projectType: 'table',
+      units: 'in',
+      dimensions: { length: 60, width: 36, height: 30 },
+      species: 'red-oak',
+      joinery: 'mortise-tenon',
+    });
+    const top = dining.lumber.groups.find((g) => g.stock.label === '5/4')!;
+    expect(top.boards.map((b) => b.size.length)).toEqual([72, 72, 72, 72, 72, 72]);
+  });
+
+  it('explains when a piece is too wide for any board', () => {
+    expect(() =>
+      plan({
+        projectType: 'table',
+        units: 'in',
+        dimensions: { length: 60, width: 36, height: 30 },
+        species: 'red-oak',
+        joinery: 'mortise-tenon',
+        options: { maxTopBoardWidth: 12 },
+      }),
+    ).toThrow(/wide.*max top board width/);
   });
 });

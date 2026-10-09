@@ -34,6 +34,8 @@ export function finishedVolume(part: Part): number {
 }
 
 export interface CutListRow {
+  /** Plan-style key (A, B, C…) shared by the cut list, diagrams and 3D view. */
+  letter: string;
   /** Part ids in this row (identical pieces are grouped). */
   ids: string[];
   name: string;
@@ -45,6 +47,16 @@ export interface CutListRow {
   allowanceReason?: string;
   /** The maker already has this piece (e.g. their slab). */
   owned: boolean;
+}
+
+/** 0 → A, 25 → Z, 26 → AA. */
+export function rowLetter(i: number): string {
+  return i < 26 ? String.fromCharCode(65 + i) : rowLetter(Math.floor(i / 26) - 1) + rowLetter(i % 26);
+}
+
+/** partId → cut list letter. */
+export function lettersByPart(rows: CutListRow[]): Record<string, string> {
+  return Object.fromEntries(rows.flatMap((r) => r.ids.map((id) => [id, r.letter])));
 }
 
 const key = (p: Part, s: CutSize) =>
@@ -62,6 +74,7 @@ export function cutList(model: Model): CutListRow[] {
       row.quantity++;
     } else {
       rows.set(k, {
+        letter: rowLetter(rows.size),
         ids: [part.id],
         name: part.name,
         role: part.role,

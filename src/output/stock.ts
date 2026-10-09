@@ -19,9 +19,14 @@ export const ROUGH_END_TRIM = 2;
 /** Squaring the factory ends of surfaced (S4S) boards. */
 export const S4S_END_TRIM = 1 / 2;
 
+/** Rough thicknesses lumberyards actually stock, in quarters of an inch. */
+const ROUGH_QUARTERS = [4, 5, 6, 8, 10, 12, 16];
 const ROUGH_WIDTHS = [4, 5, 6, 7, 8];
+/** Boards over 10′ are harder to find and to get home; prefer shorter ones unless longer saves wood. */
+const LONG_BOARD_PENALTY_PER_FOOT = 0.02;
 const ROUGH_WIDE_WIDTHS = [10, 12];
-const ROUGH_LENGTHS = [72, 96, 120];
+const ROUGH_LENGTHS = [72, 96, 120, 144];
+const ROUGH_LONG_LENGTHS = [168, 192];
 
 const S4S_THICKNESSES = [
   { label: '1×', nominal: 1, actual: 0.75 },
@@ -37,6 +42,7 @@ const S4S_WIDTHS = [
   { nominal: 12, actual: 11.25 },
 ];
 const S4S_LENGTHS = [72, 96, 120, 144];
+const S4S_LONG_LENGTHS = [192];
 
 export interface StockThickness {
   label: string;
@@ -52,7 +58,13 @@ export function stockThicknessFor(finished: number, species: Species): StockThic
     if (!t) throw new Error(`No surfaced ${species.name} is thick enough for a ${finished}″ part; laminate it from thinner boards.`);
     return { label: t.label, nominal: t.nominal, maxFinished: t.actual };
   }
-  const quarters = Math.max(4, Math.ceil((finished + MILLING_ALLOWANCE) * 4 - 1e-9));
+  const needed = (finished + MILLING_ALLOWANCE) * 4 - 1e-9;
+  const quarters = ROUGH_QUARTERS.find((q) => q >= needed);
+  if (!quarters) {
+    throw new Error(
+      `${finished.toFixed(2)}″ is thicker than any rough ${species.name.toLowerCase()} stocked (16/4 mills to ${16 / 4 - MILLING_ALLOWANCE}″); laminate it from thinner boards.`,
+    );
+  }
   return { label: `${quarters}/4`, nominal: quarters / 4, maxFinished: quarters / 4 - MILLING_ALLOWANCE };
 }
 
@@ -130,12 +142,25 @@ export function packBoards(pieces: Piece[], usableWidth: number, usableLength: n
   return boards.map((b) => ({ placements: b.placements }));
 }
 
+export interface BoardSize {
+  /** Width and length to buy (rough or nominal), inches. */
+  width: number;
+  length: number;
+  /** What's left after edge jointing and end trimming. */
+  usableWidth: number;
+  usableLength: number;
+}
+
+export interface PlannedBoard extends PackedBoard {
+  size: BoardSize;
+  boardFeet: number;
+}
+
 export interface StockGroup {
   species: string;
   stock: StockThickness;
-  /** Board size to buy (rough or nominal) and the area actually usable on it. */
-  board: { width: number; length: number; usableWidth: number; usableLength: number };
-  boards: PackedBoard[];
+  /** Each board is sized to what it carries, so sizes can differ. */
+  boards: PlannedBoard[];
   purposes: string[];
   boardFeet: { net: number; packed: number; recommended: number };
   pricePerBoardFoot: number;
@@ -149,6 +174,86 @@ export interface LumberPlan {
 }
 
 const boardFeet = (thickness: number, width: number, length: number) => (thickness * width * length) / 144;
+
+/**
+ * Board sizes to consider, smallest first. The common sizes come first; very
+ * wide (10–12″) and very long (14–16′) boards are harder to find and only
+ * used when a piece needs them.
+ */
+function boardSizes(species: Species, stock: StockThickness): { common: BoardSize[]; all: BoardSize[] } {
+  const rough = species.soldAs === 'rough';
+  const make = (widths: { nominal: number; usable: number }[], lengths: number[]) =>
+    widths
+      .flatMap((w) =>
+        lengths.map((len) => ({
+          width: w.nominal,
+          length: len,
+          usableWidth: w.usable,
+          usableLength: len - (rough ? ROUGH_END_TRIM : S4S_END_TRIM),
+        })),
+      )
+      .sort((a, b) => boardFeet(stock.nominal, a.width, a.length) - boardFeet(stock.nominal, b.width, b.length) || a.length - b.length);
+  if (rough) {
+    const w = (ws: number[]) => ws.map((x) => ({ nominal: x, usable: x - ROUGH_EDGE_ALLOWANCE }));
+    return { common: make(w(ROUGH_WIDTHS), ROUGH_LENGTHS), all: make(w([...ROUGH_WIDTHS, ...ROUGH_WIDE_WIDTHS]), [...ROUGH_LENGTHS, ...ROUGH_LONG_LENGTHS]) };
+  }
+  const w = S4S_WIDTHS.map((x) => ({ nominal: x.nominal, usable: x.actual }));
+  return { common: make(w.slice(0, 3), S4S_LENGTHS), all: make(w, [...S4S_LENGTHS, ...S4S_LONG_LENGTHS]) };
+}
+
+/** Smallest single board (by board feet) that holds these pieces. */
+function rightSize(pieces: Piece[], sizes: BoardSize[], kerf: number, stock: StockThickness): PlannedBoard | null {
+  for (const size of sizes) {
+    const packed = packBoards(pieces, size.usableWidth, size.usableLength, kerf);
+    if (packed && packed.length === 1) return { ...packed[0], size, boardFeet: boardFeet(stock.nominal, size.width, size.length) };
+  }
+  return null;
+}
+
+/**
+ * Pack every piece of one thickness. Try each board size as the "main" size,
+ * then shrink every board to the smallest size that still holds its pieces —
+ * the last board in a run is usually half empty. Keep the plan with the
+ * fewest board feet, then the fewest boards, then the fewest different sizes.
+ */
+function planBoards(pieces: Piece[], sizes: BoardSize[], kerf: number, stock: StockThickness): PlannedBoard[] | null {
+  // bf here is a score: board feet with a small surcharge on long boards.
+  let best: { boards: PlannedBoard[]; bf: number; distinct: number } | null = null;
+  for (const main of sizes) {
+    const packed = packBoards(pieces, main.usableWidth, main.usableLength, kerf);
+    if (!packed) continue;
+    const boards: PlannedBoard[] = [];
+    for (const b of packed) {
+      const own = pieces.filter((p) => b.placements.some((pl) => pl.partId === p.partId));
+      boards.push(rightSize(own, sizes, kerf, stock) ?? { ...b, size: main, boardFeet: boardFeet(stock.nominal, main.width, main.length) });
+    }
+    const bf = boards.reduce((s, b) => s + b.boardFeet * (1 + LONG_BOARD_PENALTY_PER_FOOT * Math.max(0, b.size.length / 12 - 10)), 0);
+    const distinct = new Set(boards.map((b) => `${b.size.width}x${b.size.length}`)).size;
+    const better =
+      !best ||
+      bf < best.bf - 1e-9 ||
+      (Math.abs(bf - best.bf) < 1e-9 && (boards.length < best.boards.length || (boards.length === best.boards.length && distinct < best.distinct)));
+    if (better) best = { boards, bf, distinct };
+  }
+  return best?.boards.sort((a, b) => b.boardFeet - a.boardFeet) ?? null;
+}
+
+function unsourceable(pieces: Piece[], stock: StockThickness, species: Species, sizes: BoardSize[]): Error {
+  const maxW = Math.max(...sizes.map((s) => s.usableWidth));
+  const maxL = Math.max(...sizes.map((s) => s.usableLength));
+  const wide = pieces.find((p) => p.width > maxW + 1e-9);
+  if (wide) {
+    return new Error(
+      `${wide.name} is ${wide.width.toFixed(2)}″ wide, more than the widest ${stock.label} ${species.name.toLowerCase()} board yields (${maxW}″). ` +
+        'Glue it up from narrower boards (for a top, lower the max top board width).',
+    );
+  }
+  const long = pieces.find((p) => p.length > maxL + 1e-9)!;
+  return new Error(
+    `${long.name} is ${long.length.toFixed(1)}″ long, longer than the longest ${stock.label} board planned for (${Math.round((maxL + 2) / 12)}′). ` +
+      'Shorten it or join it end to end.',
+  );
+}
 
 export function planLumber(model: Model): LumberPlan {
   const { kerf, overage } = model.spec.stock;
@@ -165,39 +270,19 @@ export function planLumber(model: Model): LumberPlan {
 
   const groups: StockGroup[] = [];
   for (const { species, stock, pieces } of byGroup.values()) {
-    const rough = species.soldAs === 'rough';
-    const tryWidths = (widths: { nominal: number; usable: number }[]) => {
-      let best: Omit<StockGroup, 'purposes' | 'boardFeet' | 'pricePerBoardFoot' | 'cost' | 'species' | 'stock'> & { bf: number } | null = null;
-      for (const w of widths) {
-        for (const len of rough ? ROUGH_LENGTHS : S4S_LENGTHS) {
-          const usableLength = len - (rough ? ROUGH_END_TRIM : S4S_END_TRIM);
-          const boards = packBoards(pieces, w.usable, usableLength, kerf);
-          if (!boards) continue;
-          const bf = boards.length * boardFeet(stock.nominal, w.nominal, len);
-          const better = !best || bf < best.bf - 1e-9 || (Math.abs(bf - best.bf) < 1e-9 && boards.length < best.boards.length);
-          if (better) best = { bf, boards, board: { width: w.nominal, length: len, usableWidth: w.usable, usableLength } };
-        }
-      }
-      return best;
-    };
-    const widthOptions = (ws: number[]) => ws.map((w) => ({ nominal: w, usable: w - ROUGH_EDGE_ALLOWANCE }));
-    const best = rough
-      ? (tryWidths(widthOptions(ROUGH_WIDTHS)) ?? tryWidths(widthOptions(ROUGH_WIDE_WIDTHS)))
-      : tryWidths(S4S_WIDTHS.map((w) => ({ nominal: w.nominal, usable: w.actual })));
-    if (!best) {
-      const longest = Math.max(...pieces.map((p) => p.length));
-      throw new Error(`Can't source ${stock.label} ${species.name} for a ${longest.toFixed(1)}″ piece — split it or glue it up.`);
-    }
+    const sizes = boardSizes(species, stock);
+    const boards = planBoards(pieces, sizes.common, kerf, stock) ?? planBoards(pieces, sizes.all, kerf, stock);
+    if (!boards) throw unsourceable(pieces, stock, species, sizes.all);
+    const packed = boards.reduce((s, b) => s + b.boardFeet, 0);
     const net = pieces.reduce((s, p) => s + boardFeet(stock.nominal, p.width, p.length), 0);
-    const recommended = best.bf * (1 + overage);
+    const recommended = packed * (1 + overage);
     const price = species.pricePerBoardFoot * thicknessPremium(stock, species);
     groups.push({
       species: species.id,
       stock,
-      board: best.board,
-      boards: best.boards,
+      boards,
       purposes: [...new Set(pieces.map((p) => p.name))],
-      boardFeet: { net, packed: best.bf, recommended },
+      boardFeet: { net, packed, recommended },
       pricePerBoardFoot: price,
       cost: recommended * price,
     });

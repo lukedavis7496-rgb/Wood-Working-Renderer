@@ -72,7 +72,9 @@ function buildTable(spec: NormalizedSpec): Model {
   else if (o.tableStyle === 'round') top = o.roundTop === 'slab' ? roundSlab(spec) : roundBoardTop(spec);
   else top = rectBoardTop(spec);
 
-  const parts: Part[] = [...top.parts];
+  // Cut list order follows part order: base first, glued-up top last; a slab
+  // you own leads, since the design is built around it.
+  const parts: Part[] = [];
   const joints: Joint[] = [];
   const hardware: HardwareItem[] = [];
   const warnings: string[] = [];
@@ -141,7 +143,8 @@ function buildTable(spec: NormalizedSpec): Model {
   steps.push(finishStep(spec));
   steps.push(attach);
 
-  return { spec, parts, joints, assemblies, hardware, assemblySteps: steps, warnings };
+  const ordered = top.parts[0].sourcing === 'owned' ? [...top.parts, ...parts] : [...parts, ...top.parts];
+  return { spec, parts: ordered, joints, assemblies, hardware, assemblySteps: steps, warnings };
 }
 
 const choice = (value: string, label: string) => ({ value, label });
@@ -267,7 +270,7 @@ export const table: ProjectType = {
       choices: [choice('straight', 'Straight (square)'), choice('tapered', 'Tapered (inside faces)')],
       showIf: apronBase,
     },
-    { key: 'legThickness', label: 'Leg thickness', kind: 'length', default: (c) => (c.dimensions.height < 22 ? 1.5 : 1.75), min: 1, max: 4, showIf: apronBase },
+    { key: 'legThickness', label: 'Leg thickness', kind: 'length', default: (c) => (c.dimensions.height < 22 ? 1.5 : 1.75), min: 1, max: 3.5, showIf: apronBase },
     {
       key: 'taperFootSize',
       label: 'Taper: size at foot',

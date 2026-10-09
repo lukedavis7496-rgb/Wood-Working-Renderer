@@ -242,9 +242,11 @@ export function buildApronBase(spec: NormalizedSpec, { hl, hw, legLen }: ApronFo
     return { id, role: 'apron', name, species: species.id, solids, cutouts, placement, notes };
   }
 
+  // Front/back aprons run along the table's length; name them by which is
+  // actually longer (a table can be entered deeper than it is long).
   const square = Math.abs(hl - hw) < 1e-9;
-  const longName = square ? 'Apron' : 'Long apron';
-  const shortName = square ? 'Apron' : 'Short apron';
+  const longName = square ? 'Apron' : hl > hw ? 'Long apron' : 'Short apron';
+  const shortName = square ? 'Apron' : hl > hw ? 'Short apron' : 'Long apron';
   const y0 = apronBottom;
   parts.push(
     apron('apron-front', longName, longShoulder, { origin: [-hl + T - Lt, y0, hw - s], x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, -1] }, ['leg-fl', 'leg-fr']),

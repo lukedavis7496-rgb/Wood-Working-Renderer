@@ -48,6 +48,7 @@ function finishColor(base: string, finish: Finish): THREE.Color {
 interface PartView {
   part: Part;
   group: THREE.Group;
+  label: HTMLElement;
   home: THREE.Vector3;
   bodyMaterial: THREE.MeshStandardMaterial;
   tenonMaterial: THREE.MeshStandardMaterial;
@@ -68,13 +69,26 @@ export class Viewer {
   private hovered: PartView | null = null;
   private explode = 0;
   private xray = false;
+  private showLabels = false;
+  private selected = new Set<string>();
   private firstFit = true;
+  private labelLayer = document.createElement('div');
+  private downAt: { x: number; y: number } | null = null;
+  /** Letter shown on each part (cut list key). */
+  letters: Record<string, string> = {};
+  /** Called when the pointer moves onto or off a part. */
+  onHover: (partId: string | null) => void = () => {};
+  /** Called when a part is clicked (not dragged); null for empty space. */
+  onPick: (partId: string | null) => void = () => {};
 
   constructor(
     private container: HTMLElement,
     private tooltip: HTMLElement,
     private describe: (part: Part) => string,
   ) {
+    this.labelLayer.className = 'part-labels';
+    this.labelLayer.hidden = true;
+    container.appendChild(this.labelLayer);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
@@ -93,10 +107,19 @@ export class Viewer {
     new ResizeObserver(() => this.resize()).observe(container);
     this.renderer.domElement.addEventListener('pointermove', (e) => this.onPointer(e));
     this.renderer.domElement.addEventListener('pointerleave', () => this.setHover(null));
+    this.renderer.domElement.addEventListener('pointerdown', (e) => (this.downAt = { x: e.clientX, y: e.clientY }));
+    this.renderer.domElement.addEventListener('pointerup', (e) => {
+      if (this.downAt && Math.hypot(e.clientX - this.downAt.x, e.clientY - this.downAt.y) < 5) {
+        this.onPointer(e);
+        this.onPick(this.hovered?.part.id ?? null);
+      }
+      this.downAt = null;
+    });
     this.resize();
     this.renderer.setAnimationLoop(() => {
       this.controls.update();
       this.renderer.render(this.scene, this.camera);
+      if (this.showLabels) this.placeLabels();
     });
   }
 
@@ -111,6 +134,7 @@ export class Viewer {
     this.root.clear();
     this.views = [];
     this.hovered = null;
+    this.labelLayer.replaceChildren();
 
     const all = new THREE.Box3();
     model.parts.forEach((part, i) => {
@@ -139,7 +163,10 @@ export class Viewer {
       }
       const box = new THREE.Box3().setFromObject(group);
       all.union(box);
-      this.views.push({ part, group, home: box.getCenter(new THREE.Vector3()), bodyMaterial, tenonMaterial });
+      const label = document.createElement('span');
+      label.textContent = this.letters[part.id] ?? '';
+      if (label.textContent) this.labelLayer.appendChild(label);
+      this.views.push({ part, group, label, home: box.getCenter(new THREE.Vector3()), bodyMaterial, tenonMaterial });
       this.root.add(group);
     });
     all.getCenter(this.center);
@@ -161,20 +188,48 @@ export class Viewer {
     this.applyModes();
   }
 
+  setLabels(on: boolean): void {
+    this.showLabels = on;
+    this.labelLayer.hidden = !on;
+  }
+
+  /** Highlight these parts and fade the rest; empty clears the highlight. */
+  setSelected(ids: Iterable<string>): void {
+    this.selected = new Set(ids);
+    this.applyModes();
+  }
+
+  private placeLabels(): void {
+    const { clientWidth: w, clientHeight: h } = this.container;
+    const p = new THREE.Vector3();
+    for (const v of this.views) {
+      if (!v.label.textContent) continue;
+      p.copy(v.home).add(v.group.position).project(this.camera);
+      const visible = p.z < 1 && Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1;
+      v.label.hidden = !visible;
+      if (visible) v.label.style.transform = `translate(${((p.x + 1) / 2) * w}px, ${((1 - p.y) / 2) * h}px) translate(-50%, -50%)`;
+    }
+  }
+
   resetView(): void {
     this.fit(new THREE.Box3().setFromObject(this.root));
   }
 
   private applyModes(): void {
+    const focusing = this.selected.size > 0;
     for (const v of this.views) {
       const dir = v.home.clone().sub(this.center);
       v.group.position.copy(dir.multiplyScalar(this.explode * 0.6));
+      const isSelected = this.selected.has(v.part.id);
+      // Faded: everything in x-ray, or the parts not picked while some are.
+      const faded = this.xray || (focusing && !isSelected);
+      v.label.classList.toggle('selected', isSelected);
       for (const m of [v.bodyMaterial, v.tenonMaterial]) {
-        if (m.transparent !== this.xray) m.needsUpdate = true;
-        m.transparent = this.xray;
-        m.opacity = this.xray ? (m === v.tenonMaterial ? 0.85 : 0.18) : 1;
-        m.depthWrite = !this.xray;
-        m.emissive.set(v === this.hovered ? '#553311' : '#000000');
+        if (m.transparent !== faded) m.needsUpdate = true;
+        m.transparent = faded;
+        m.opacity = !faded ? 1 : this.xray && (m === v.tenonMaterial || isSelected) ? 0.85 : focusing && !this.xray ? 0.12 : 0.18;
+        m.depthWrite = !faded;
+        m.emissive.set(isSelected ? '#6b3510' : v === this.hovered ? '#553311' : '#000000');
       }
       v.group.traverse((o) => {
         if (o.userData.cutout) o.visible = this.xray;
@@ -223,5 +278,6 @@ export class Viewer {
     this.hovered = v;
     this.tooltip.hidden = !v;
     this.applyModes();
+    this.onHover(v?.part.id ?? null);
   }
 }

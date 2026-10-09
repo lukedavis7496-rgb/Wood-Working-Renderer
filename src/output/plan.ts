@@ -3,14 +3,16 @@ import type { Model, ProjectSpec } from '../core/types';
 import { FINISH_LABELS, JOINERY_LABELS } from '../core/types';
 import { formatBoardLength, formatDims, formatLength, type Unit } from '../core/units';
 import { buildModel, getProjectType } from '../projects/registry';
-import { cutList, finishedWeight, type CutListRow } from './cutList';
-import { planLumber, type LumberPlan, type StockGroup } from './stock';
+import { cutList, finishedWeight, lettersByPart, type CutListRow } from './cutList';
+import { planLumber, type BoardSize, type LumberPlan, type StockGroup } from './stock';
 
 export interface ProjectPlan {
   model: Model;
   cutList: CutListRow[];
   lumber: LumberPlan;
   shoppingList: string[];
+  /** partId → cut list letter (A, B, C…). */
+  letters: Record<string, string>;
   /** Priced hardware (e.g. steel legs), USD. */
   hardwareCost: number;
   /** Lumber + priced hardware, USD. */
@@ -31,9 +33,11 @@ export function plan(spec: ProjectSpec): ProjectPlan {
     ...priced.map((h) => `${count(h.quantity)} ${h.item.charAt(0).toLowerCase()}${h.item.slice(1)} (~$${Math.round(h.quantity * h.unitCost!)}).`),
   ];
   if (!shoppingList.length) shoppingList.push('No lumber to buy.');
+  const rows = cutList(model);
   return {
     model,
-    cutList: cutList(model),
+    cutList: rows,
+    letters: lettersByPart(rows),
     lumber,
     shoppingList: shoppingList.map((l) => l.charAt(0).toUpperCase() + l.slice(1)),
     hardwareCost,
@@ -56,17 +60,35 @@ function plural(name: string): string {
   return base.endsWith('s') ? base : `${base}s`;
 }
 
-/** "~4.6 board feet of 8/4 red oak: one board at least 4″ wide × 6′ long, for the legs." */
+/** Board width as a buyer asks for it: whole inches, or mm. */
+export function formatBoardWidth(inches: number, unit: Unit): string {
+  return unit === 'mm' ? formatLength(inches, unit) : `${inches}″`;
+}
+
+/** Boards of one stock grouped by size, largest first: [{count, size}]. */
+export function boardsBySize(g: StockGroup): { count: number; size: BoardSize }[] {
+  const out: { count: number; size: BoardSize }[] = [];
+  for (const b of g.boards) {
+    const hit = out.find((o) => o.size.width === b.size.width && o.size.length === b.size.length);
+    if (hit) hit.count++;
+    else out.push({ count: 1, size: b.size });
+  }
+  return out;
+}
+
+/** "~5.8 board feet of 8/4 red oak: one board at least 5″ wide × 6′ long, for the legs." */
 export function shoppingLine(g: StockGroup, unit: Unit): string {
   const species = getSpecies(g.species);
-  const n = g.boards.length;
-  const width = unit === 'mm' ? formatLength(g.board.width, unit) : `${g.board.width}″`;
-  const what = species.soldAs === 'rough' ? `${g.stock.label} ${species.name.toLowerCase()}` : `${species.name}`;
-  const boardDesc =
-    species.soldAs === 'rough'
-      ? `${count(n)} board${n > 1 ? 's' : ''} at least ${width} wide × ${formatBoardLength(g.board.length, unit)} long`
-      : `${count(n)} ${g.stock.label}${g.board.width} board${n > 1 ? 's' : ''}, ${formatBoardLength(g.board.length, unit)} long`;
-  return `~${g.boardFeet.recommended.toFixed(1)} board feet of ${what}: ${boardDesc}, for the ${joinWords(g.purposes.map(plural))}.`;
+  const rough = species.soldAs === 'rough';
+  const what = rough ? `${g.stock.label} ${species.name.toLowerCase()}` : `${species.name}`;
+  const sizes = boardsBySize(g).map(({ count: n, size }, i) => {
+    const len = formatBoardLength(size.length, unit);
+    if (!rough) return `${count(n)} ${g.stock.label}${size.width} board${n > 1 ? 's' : ''}, ${len} long`;
+    return i === 0
+      ? `${count(n)} board${n > 1 ? 's' : ''} at least ${formatBoardWidth(size.width, unit)} wide × ${len} long`
+      : `${count(n)} at least ${formatBoardWidth(size.width, unit)} × ${len}`;
+  });
+  return `~${g.boardFeet.recommended.toFixed(1)} board feet of ${what}: ${joinWords(sizes)}, for the ${joinWords(g.purposes.map(plural))}.`;
 }
 
 /** Plain-text report for the CLI. */
@@ -95,9 +117,9 @@ export function formatPlan(p: ProjectPlan): string {
 
   lines.push('CUT LIST (finished sizes: thickness × width × length)');
   for (const r of p.cutList) {
-    lines.push(`  ${String(r.quantity).padStart(2)} × ${r.name.padEnd(22)} ${formatDims(r.size.thickness, r.size.width, r.size.length, u)}`);
-    if (r.allowanceReason) lines.push(`         (${r.allowanceReason})`);
-    for (const n of r.notes) lines.push(`         - ${n}`);
+    lines.push(`  ${r.letter.padEnd(2)} ${String(r.quantity).padStart(2)} × ${r.name.padEnd(22)} ${formatDims(r.size.thickness, r.size.width, r.size.length, u)}${r.owned ? '  (your slab)' : ''}`);
+    if (r.allowanceReason) lines.push(`            (${r.allowanceReason})`);
+    for (const n of r.notes) lines.push(`            - ${n}`);
   }
   for (const a of model.assemblies) {
     lines.push(`  ${a.name}: ${formatDims(a.finishedSize.thickness, a.finishedSize.width, a.finishedSize.length, u)} — ${a.note}`);
