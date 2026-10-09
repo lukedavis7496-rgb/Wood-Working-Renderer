@@ -53,6 +53,11 @@ export function formatBoardLength(inches: number, unit: Unit): string {
   return rest < 1e-6 ? `${feet}′` : `${feet}′${formatInches(rest)}`;
 }
 
+/** Small measurements (sag, gaps) where 1/16″ is too coarse: 0.052″ or 1.3 mm. */
+export function formatSmall(inches: number, unit: Unit): string {
+  return unit === 'mm' ? `${(inches * MM_PER_INCH).toFixed(1)} mm` : `${inches.toFixed(3).replace(/^0/, '')}″`;
+}
+
 export function formatDims(t: number, w: number, l: number, unit: Unit): string {
   return `${formatLength(t, unit)} × ${formatLength(w, unit)} × ${formatLength(l, unit)}`;
 }

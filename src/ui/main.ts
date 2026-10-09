@@ -5,7 +5,9 @@ import { cutSize } from '../output/cutList';
 import { plan, type ProjectPlan } from '../output/plan';
 import { esc, renderForm } from './form';
 import { Outputs } from './outputs';
-import { convertUnits, currentDesign, defaultState, loadStore, newDesign, saveStore, toSpec, type FormState } from './state';
+import { convertUnits, currentDesign, defaultState, inputLength, loadStore, newDesign, saveStore, toSpec, type FormState } from './state';
+import { getProjectType } from '../projects/registry';
+import { toInches } from '../core/units';
 import { Viewer } from './viewer';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -138,8 +140,13 @@ function onFormEvent(e: Event): void {
     s.units = value as FormState['units'];
   } else if (name === 'projectType') {
     if (value !== s.projectType) {
+      const type = getProjectType(value);
       s.projectType = value;
       s.options = {};
+      if (!type.supportedJoinery.includes(s.joinery)) s.joinery = type.supportedJoinery[0];
+      s.length = inputLength(toInches(type.defaultDimensions.length, 'in'), s.units);
+      s.width = inputLength(toInches(type.defaultDimensions.width, 'in'), s.units);
+      s.height = inputLength(toInches(type.defaultDimensions.height, 'in'), s.units);
       refit = true;
     }
   } else (s as unknown as Record<string, string>)[name] = value;

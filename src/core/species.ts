@@ -26,18 +26,20 @@ export interface Species {
    * flatsawn faces — most boards and nearly all slabs — radial to quartersawn.
    */
   movement: { tangential: number; radial: number };
+  /** Modulus of elasticity (bending stiffness) at 12% MC, psi. USDA Wood Handbook table 5-3a. */
+  modulusPsi: number;
 }
 
 export const SPECIES: Record<string, Species> = {
-  'red-oak': { id: 'red-oak', name: 'Red oak', densityLbPerFt3: 44, pricePerBoardFoot: 6, soldAs: 'rough', blotchy: false, color: '#c4986a', movement: { tangential: 0.00369, radial: 0.00158 } },
-  'white-oak': { id: 'white-oak', name: 'White oak', densityLbPerFt3: 47, pricePerBoardFoot: 9, soldAs: 'rough', blotchy: false, color: '#b8a07a', movement: { tangential: 0.00365, radial: 0.0018 } },
-  walnut: { id: 'walnut', name: 'Black walnut', densityLbPerFt3: 38, pricePerBoardFoot: 14, soldAs: 'rough', blotchy: false, color: '#7a5640', movement: { tangential: 0.00274, radial: 0.0019 } },
-  'hard-maple': { id: 'hard-maple', name: 'Hard maple', densityLbPerFt3: 44, pricePerBoardFoot: 7.5, soldAs: 'rough', blotchy: true, color: '#e3cfa8', movement: { tangential: 0.00353, radial: 0.00165 } },
-  'soft-maple': { id: 'soft-maple', name: 'Soft maple', densityLbPerFt3: 38, pricePerBoardFoot: 5.5, soldAs: 'rough', blotchy: true, color: '#dcc49c', movement: { tangential: 0.00289, radial: 0.00137 } },
-  cherry: { id: 'cherry', name: 'Cherry', densityLbPerFt3: 35, pricePerBoardFoot: 9, soldAs: 'rough', blotchy: true, color: '#a8664a', movement: { tangential: 0.00248, radial: 0.00126 } },
-  ash: { id: 'ash', name: 'Ash', densityLbPerFt3: 41, pricePerBoardFoot: 6.5, soldAs: 'rough', blotchy: false, color: '#d6c29c', movement: { tangential: 0.00274, radial: 0.00169 } },
-  poplar: { id: 'poplar', name: 'Poplar', densityLbPerFt3: 29, pricePerBoardFoot: 4, soldAs: 'rough', blotchy: true, color: '#cfc79a', movement: { tangential: 0.00289, radial: 0.00158 } },
-  pine: { id: 'pine', name: 'Pine (S4S)', densityLbPerFt3: 26, pricePerBoardFoot: 3, soldAs: 'dimensional', blotchy: true, color: '#e8cf9a', movement: { tangential: 0.00212, radial: 0.00071 } },
+  'red-oak': { id: 'red-oak', name: 'Red oak', densityLbPerFt3: 44, pricePerBoardFoot: 6, soldAs: 'rough', blotchy: false, color: '#c4986a', movement: { tangential: 0.00369, radial: 0.00158 }, modulusPsi: 1820000 },
+  'white-oak': { id: 'white-oak', name: 'White oak', densityLbPerFt3: 47, pricePerBoardFoot: 9, soldAs: 'rough', blotchy: false, color: '#b8a07a', movement: { tangential: 0.00365, radial: 0.0018 }, modulusPsi: 1780000 },
+  walnut: { id: 'walnut', name: 'Black walnut', densityLbPerFt3: 38, pricePerBoardFoot: 14, soldAs: 'rough', blotchy: false, color: '#7a5640', movement: { tangential: 0.00274, radial: 0.0019 }, modulusPsi: 1680000 },
+  'hard-maple': { id: 'hard-maple', name: 'Hard maple', densityLbPerFt3: 44, pricePerBoardFoot: 7.5, soldAs: 'rough', blotchy: true, color: '#e3cfa8', movement: { tangential: 0.00353, radial: 0.00165 }, modulusPsi: 1830000 },
+  'soft-maple': { id: 'soft-maple', name: 'Soft maple', densityLbPerFt3: 38, pricePerBoardFoot: 5.5, soldAs: 'rough', blotchy: true, color: '#dcc49c', movement: { tangential: 0.00289, radial: 0.00137 }, modulusPsi: 1640000 },
+  cherry: { id: 'cherry', name: 'Cherry', densityLbPerFt3: 35, pricePerBoardFoot: 9, soldAs: 'rough', blotchy: true, color: '#a8664a', movement: { tangential: 0.00248, radial: 0.00126 }, modulusPsi: 1490000 },
+  ash: { id: 'ash', name: 'Ash', densityLbPerFt3: 41, pricePerBoardFoot: 6.5, soldAs: 'rough', blotchy: false, color: '#d6c29c', movement: { tangential: 0.00274, radial: 0.00169 }, modulusPsi: 1740000 },
+  poplar: { id: 'poplar', name: 'Poplar', densityLbPerFt3: 29, pricePerBoardFoot: 4, soldAs: 'rough', blotchy: true, color: '#cfc79a', movement: { tangential: 0.00289, radial: 0.00158 }, modulusPsi: 1580000 },
+  pine: { id: 'pine', name: 'Pine (S4S)', densityLbPerFt3: 26, pricePerBoardFoot: 3, soldAs: 'dimensional', blotchy: true, color: '#e8cf9a', movement: { tangential: 0.00212, radial: 0.00071 }, modulusPsi: 1240000 },
 };
 
 export function getSpecies(id: string): Species {

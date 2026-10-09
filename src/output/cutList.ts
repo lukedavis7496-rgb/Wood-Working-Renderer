@@ -97,6 +97,19 @@ const STEEL_LB_PER_FT3 = 490;
  */
 const TUBE_FILL = 0.19;
 
+/** Identical glue-ups (two matching sides, several shelves) listed once with a count. */
+export function groupedAssemblies(model: Model): { quantity: number; assembly: Model['assemblies'][number] }[] {
+  const out: { quantity: number; assembly: Model['assemblies'][number]; key: string }[] = [];
+  for (const a of model.assemblies) {
+    const s = a.finishedSize;
+    const key = [a.name, a.note, s.thickness.toFixed(4), s.width.toFixed(4), s.length.toFixed(4)].join('/');
+    const hit = out.find((o) => o.key === key);
+    if (hit) hit.quantity++;
+    else out.push({ quantity: 1, assembly: a, key });
+  }
+  return out.map(({ quantity, assembly }) => ({ quantity, assembly }));
+}
+
 /** Finished weight in pounds, wood and steel. */
 export function finishedWeight(model: Model): number {
   return model.parts.reduce((w, p) => {

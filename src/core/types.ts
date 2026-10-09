@@ -112,8 +112,15 @@ export interface Part {
   allowance?: { length: number; width: number; reason: string };
   /** Shaping/machining notes that don't change the blank size (tapers, mortises). */
   notes: string[];
-  /** Bought steel parts are shown in the model but aren't cut or planned as lumber. */
-  material?: 'wood' | 'steel';
+  /**
+   * 'steel': bought parts shown in the model but not cut or planned as lumber.
+   * 'plywood': cut from 4×8 sheets of this species' veneer plywood instead of boards.
+   */
+  material?: 'wood' | 'steel' | 'plywood';
+  /** For a board in a glue-up: the panel it belongs to and that panel's name ("Side"). */
+  panel?: { id: string; name: string };
+  /** Grain direction doesn't matter (a plywood back): may be turned to fit a sheet. */
+  rotatable?: boolean;
   /** 'owned': material the maker already has (e.g. their slab) — not on the lumber list. */
   sourcing?: 'owned';
 }

@@ -1,5 +1,6 @@
 import { SPECIES } from '../core/species';
 import { formatBoardLength, formatDims, formatLength } from '../core/units';
+import { groupedAssemblies } from '../output/cutList';
 import { boardsBySize, formatBoardWidth, type ProjectPlan } from '../output/plan';
 import { esc } from './form';
 import type { Design } from './state';
@@ -64,8 +65,11 @@ export class Outputs {
     const pieces = p.cutList.reduce((n, r) => n + r.quantity, 0);
     const owned = p.cutList.some((r) => r.owned);
     const mv = p.model.movement;
+    const sheets = p.lumber.groups.filter((g) => g.kind === 'sheet').reduce((n, g) => n + g.boards.length, 0);
+    const hasLumber = p.lumber.groups.some((g) => g.kind === 'lumber');
+    const extra = [owned ? 'plus your slab' : '', sheets ? `plus ${sheets} sheet${sheets > 1 ? 's' : ''} of plywood` : ''].filter(Boolean).join(', ');
     $('#summary').innerHTML = `
-      <div class="stat"><span>Lumber to buy</span><strong>${p.lumber.groups.length ? `~${t.recommendedBoardFeet.toFixed(1)} bd ft` : 'None'}</strong>${owned ? '<small>plus your slab</small>' : ''}</div>
+      <div class="stat"><span>Lumber to buy</span><strong>${hasLumber ? `~${t.recommendedBoardFeet.toFixed(1)} bd ft` : 'None'}</strong>${extra ? `<small>${extra}</small>` : ''}</div>
       <div class="stat"><span>Est. cost</span><strong>~$${Math.round(p.totalCost)}</strong>${p.hardwareCost ? `<small>incl. ~$${Math.round(p.hardwareCost)} steel legs</small>` : '<small>lumber only</small>'}</div>
       <div class="stat"><span>Wood pieces</span><strong>${pieces}</strong><small>${p.cutList.length} different</small></div>
       <div class="stat"><span>Finished weight</span><strong>~${Math.round(p.weightLb)} lb</strong></div>
@@ -100,8 +104,11 @@ export class Outputs {
           )
           .join('')}</tbody>
       </table></div>
-      ${p.model.assemblies
-        .map((a) => `<p class="assembly"><strong>${esc(a.name)}</strong> — ${formatDims(a.finishedSize.thickness, a.finishedSize.width, a.finishedSize.length, u)}. ${esc(a.note)}</p>`)
+      ${groupedAssemblies(p.model)
+        .map(
+          ({ quantity, assembly: a }) =>
+            `<p class="assembly"><strong>${quantity > 1 ? `${quantity} × ` : ''}${esc(a.name)}</strong> — ${formatDims(a.finishedSize.thickness, a.finishedSize.width, a.finishedSize.length, u)}. ${esc(a.note)}</p>`,
+        )
         .join('')}`;
     $('#tab-cut')
       .querySelectorAll<HTMLElement>('tr[data-letter]')
@@ -141,10 +148,13 @@ export class Outputs {
           ? `<div class="table-scroll"><table class="compact">
         <thead><tr><th>Stock</th><th>Boards</th><th>In parts</th><th>With kerf &amp; trim</th><th>To buy (+${Math.round(p.lumber.settings.overage * 100)}%)</th><th>Est. cost</th></tr></thead>
         <tbody>${p.lumber.groups
-          .map(
-            (g) => `<tr><td>${esc(g.stock.label)} ${esc(SPECIES[g.species].name)}</td><td class="num">${boardsBySize(g)
-              .map(({ count, size }) => `${count} × ${formatBoardWidth(size.width, u)} × ${formatBoardLength(size.length, u)}`)
-              .join('<br>')}</td>
+          .map((g) =>
+            g.kind === 'sheet'
+              ? `<tr><td>${esc(formatLength(g.stock.nominal, u))} ${esc(SPECIES[g.species].name)} plywood</td><td class="num">${g.boards.length} sheet${g.boards.length > 1 ? 's' : ''}, 4′ × 8′</td>
+            <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">$${Math.round(g.cost)}</td></tr>`
+              : `<tr><td>${esc(g.stock.label)} ${esc(SPECIES[g.species].name)}</td><td class="num">${boardsBySize(g)
+                  .map(({ count, size }) => `${count} × ${formatBoardWidth(size.width, u)} × ${formatBoardLength(size.length, u)}`)
+                  .join('<br>')}</td>
             <td class="num">${g.boardFeet.net.toFixed(1)}</td><td class="num">${g.boardFeet.packed.toFixed(1)}</td><td class="num">${g.boardFeet.recommended.toFixed(1)}</td><td class="num">$${Math.round(g.cost)}</td></tr>`,
           )
           .join('')}
@@ -206,13 +216,14 @@ function cuttingDiagrams(p: ProjectPlan): string {
               return `<g data-letter="${letter}" class="piece-g"><rect class="piece" x="${x}" y="${y}" width="${w}" height="${h}"/><text x="${x + w / 2}" y="${y + h / 2}" font-size="${fs}" dominant-baseline="central" text-anchor="middle">${esc(`${letter} · ${formatLength(pl.length, u)}`)}</text><title>${esc(pl.name)}</title></g>`;
             })
             .join('');
-          return `<figure><figcaption>Board ${i + 1}: ${formatBoardWidth(size.width, u)} × ${formatBoardLength(size.length, u)}</figcaption>
+          return `<figure><figcaption>${g.kind === 'sheet' ? 'Sheet' : 'Board'} ${i + 1}: ${formatBoardWidth(size.width, u)} × ${formatBoardLength(size.length, u)}</figcaption>
             <svg viewBox="0 0 ${maxLen * scale} ${W}" preserveAspectRatio="xMinYMin meet" style="aspect-ratio:${maxLen * scale}/${W}">
               <rect class="board" x="0" y="0" width="${size.length * scale}" height="${W}"/>${rects}
             </svg></figure>`;
         })
         .join('');
-      return `<section class="diagram"><h3>${esc(g.stock.label)} ${esc(SPECIES[g.species].name)}</h3>${boards}</section>`;
+      const title = g.kind === 'sheet' ? `${formatLength(g.stock.nominal, u)} ${SPECIES[g.species].name} plywood` : `${g.stock.label} ${SPECIES[g.species].name}`;
+      return `<section class="diagram"><h3>${esc(title)}</h3>${boards}</section>`;
     })
     .join('');
 }

@@ -117,7 +117,7 @@ describe('board sizing', () => {
   });
 
   it('sources a 10′+ top from 12′ boards', () => {
-    const top = long.lumber.groups.find((g) => g.purposes.includes('Top board (glue-up)'))!;
+    const top = long.lumber.groups.find((g) => g.purposes.includes('Top'))!;
     expect(top.boards.every((b) => b.size.length === 144)).toBe(true);
   });
 

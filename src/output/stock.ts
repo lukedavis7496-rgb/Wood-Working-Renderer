@@ -78,6 +78,8 @@ function thicknessPremium(t: StockThickness, species: Species): number {
 export interface Piece {
   partId: string;
   name: string;
+  /** What the piece becomes: its panel for a glue-up board, else the part itself. */
+  makes?: { id: string; name: string };
   width: number;
   length: number;
   thickness: number;
@@ -157,12 +159,16 @@ export interface PlannedBoard extends PackedBoard {
 }
 
 export interface StockGroup {
+  /** 'lumber' is bought by the board foot; 'sheet' is 4×8 plywood bought by the sheet. */
+  kind: 'lumber' | 'sheet';
   species: string;
   stock: StockThickness;
   /** Each board is sized to what it carries, so sizes can differ. */
   boards: PlannedBoard[];
   purposes: string[];
+  /** Zero for sheet goods. */
   boardFeet: { net: number; packed: number; recommended: number };
+  /** Per board foot for lumber, per sheet for plywood. */
   pricePerBoardFoot: number;
   cost: number;
 }
@@ -174,6 +180,18 @@ export interface LumberPlan {
 }
 
 const boardFeet = (thickness: number, width: number, length: number) => (thickness * width * length) / 144;
+
+/** What the stock is for, by finished thing: ["Leg ×4", "Top"]. Names carry a ×N count when there's more than one. */
+function purposesOf(pieces: Piece[]): string[] {
+  const counts = new Map<string, Set<string>>();
+  for (const p of pieces) {
+    const m = p.makes ?? { id: p.partId, name: p.name };
+    const name = m.name.replace(/ \(.*\)$/, '');
+    if (!counts.has(name)) counts.set(name, new Set());
+    counts.get(name)!.add(m.id);
+  }
+  return [...counts].map(([name, ids]) => (ids.size > 1 ? `${name} ×${ids.size}` : name));
+}
 
 /**
  * Board sizes to consider, smallest first. The common sizes come first; very
@@ -255,17 +273,69 @@ function unsourceable(pieces: Piece[], stock: StockThickness, species: Species, 
   );
 }
 
+/** A full 4×8 sheet; factory edges are straight, so only a whisker is lost squaring them. */
+export const SHEET: BoardSize = { width: 48, length: 96, usableWidth: 47.75, usableLength: 95.75 };
+
+/** Rough price for a sheet of veneer plywood: scales with the species and thickness. */
+export function sheetPrice(species: Species, thickness: number): number {
+  return Math.round(species.pricePerBoardFoot * (4 + 10.7 * thickness));
+}
+
+function planSheets(model: Model, kerf: number): StockGroup[] {
+  const byGroup = new Map<string, { species: Species; thickness: number; pieces: Piece[] }>();
+  for (const part of model.parts) {
+    if (part.material !== 'plywood' || part.sourcing === 'owned') continue;
+    const species = getSpecies(part.species);
+    const size = cutSize(part);
+    const k = `${species.id}/${size.thickness}`;
+    if (!byGroup.has(k)) byGroup.set(k, { species, thickness: size.thickness, pieces: [] });
+    // Turn a grain-doesn't-matter piece crosswise when that's the only way it fits.
+    const fits = size.width <= SHEET.usableWidth && size.length <= SHEET.usableLength;
+    const turned = !fits && part.rotatable && size.length <= SHEET.usableWidth && size.width <= SHEET.usableLength;
+    byGroup.get(k)!.pieces.push({
+      partId: part.id,
+      name: part.name,
+      makes: part.panel ?? { id: part.id, name: part.name },
+      ...size,
+      ...(turned ? { width: size.length, length: size.width } : {}),
+    });
+  }
+  const groups: StockGroup[] = [];
+  for (const { species, thickness, pieces } of byGroup.values()) {
+    const packed = packBoards(pieces, SHEET.usableWidth, SHEET.usableLength, kerf);
+    if (!packed) {
+      const big = pieces.find((p) => p.width > SHEET.usableWidth || p.length > SHEET.usableLength)!;
+      throw new Error(
+        `${big.name} (${big.width.toFixed(1)}″ × ${big.length.toFixed(1)}″) doesn't fit on a 4′ × 8′ sheet.` +
+          (/back/i.test(big.name) ? ' Add a fixed shelf so the back can be made in two pieces.' : ''),
+      );
+    }
+    const price = sheetPrice(species, thickness);
+    groups.push({
+      kind: 'sheet',
+      species: species.id,
+      stock: { label: `${thickness}″ plywood`, nominal: thickness, maxFinished: thickness },
+      boards: packed.map((b) => ({ ...b, size: SHEET, boardFeet: 0 })),
+      purposes: purposesOf(pieces),
+      boardFeet: { net: 0, packed: 0, recommended: 0 },
+      pricePerBoardFoot: price,
+      cost: packed.length * price,
+    });
+  }
+  return groups.sort((a, b) => b.stock.nominal - a.stock.nominal);
+}
+
 export function planLumber(model: Model): LumberPlan {
   const { kerf, overage } = model.spec.stock;
   const byGroup = new Map<string, { species: Species; stock: StockThickness; pieces: Piece[] }>();
   for (const part of model.parts) {
-    if (part.material === 'steel' || part.sourcing === 'owned') continue;
+    if (part.material === 'steel' || part.material === 'plywood' || part.sourcing === 'owned') continue;
     const species = getSpecies(part.species);
     const size = cutSize(part);
     const stock = stockThicknessFor(size.thickness, species);
     const k = `${species.id}/${stock.label}`;
     if (!byGroup.has(k)) byGroup.set(k, { species, stock, pieces: [] });
-    byGroup.get(k)!.pieces.push({ partId: part.id, name: part.name, ...size });
+    byGroup.get(k)!.pieces.push({ partId: part.id, name: part.name, makes: part.panel ?? { id: part.id, name: part.name }, ...size });
   }
 
   const groups: StockGroup[] = [];
@@ -278,16 +348,18 @@ export function planLumber(model: Model): LumberPlan {
     const recommended = packed * (1 + overage);
     const price = species.pricePerBoardFoot * thicknessPremium(stock, species);
     groups.push({
+      kind: 'lumber',
       species: species.id,
       stock,
       boards,
-      purposes: [...new Set(pieces.map((p) => p.name))],
+      purposes: purposesOf(pieces),
       boardFeet: { net, packed, recommended },
       pricePerBoardFoot: price,
       cost: recommended * price,
     });
   }
   groups.sort((a, b) => b.stock.nominal - a.stock.nominal);
+  groups.push(...planSheets(model, kerf));
 
   const sum = (f: (g: StockGroup) => number) => groups.reduce((s, g) => s + f(g), 0);
   return {

@@ -4,7 +4,7 @@ import type { Model, ProjectSpec } from '../core/types';
 import { FINISH_LABELS, JOINERY_LABELS } from '../core/types';
 import { formatBoardLength, formatDims, formatLength, type Unit } from '../core/units';
 import { buildModel, getProjectType } from '../projects/registry';
-import { cutList, finishedWeight, lettersByPart, type CutListRow } from './cutList';
+import { cutList, finishedWeight, groupedAssemblies, lettersByPart, type CutListRow } from './cutList';
 import { planLumber, type BoardSize, type LumberPlan, type StockGroup } from './stock';
 
 export interface ProjectPlan {
@@ -55,9 +55,13 @@ function joinWords(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
-function plural(name: string): string {
-  const base = name.replace(/ \(.*\)$/, '').toLowerCase();
+/** "Leg ×4" → "legs", "Top" → "top", "Foot ×2" → "feet", "Adjustable shelf ×3" → "adjustable shelves". */
+function plural(purpose: string): string {
+  const m = purpose.match(/^(.*?)(?: ×(\d+))?$/)!;
+  const base = m[1].toLowerCase();
+  if (!m[2]) return base;
   if (base.endsWith('foot')) return `${base.slice(0, -4)}feet`;
+  if (base.endsWith('shelf')) return `${base.slice(0, -5)}shelves`;
   return base.endsWith('s') ? base : `${base}s`;
 }
 
@@ -80,6 +84,11 @@ export function boardsBySize(g: StockGroup): { count: number; size: BoardSize }[
 /** "~5.8 board feet of 8/4 red oak: one board at least 5″ wide × 6′ long, for the legs." */
 export function shoppingLine(g: StockGroup, unit: Unit): string {
   const species = getSpecies(g.species);
+  if (g.kind === 'sheet') {
+    const n = g.boards.length;
+    const name = species.name.replace(/ \(.*\)$/, '').toLowerCase();
+    return `${count(n)} sheet${n > 1 ? 's' : ''} of ${formatLength(g.stock.nominal, unit)} ${name} plywood (${unit === 'mm' ? '1220 × 2440 mm' : '4′ × 8′'}), for the ${joinWords(g.purposes.map(plural))} (~$${Math.round(g.cost)}).`;
+  }
   const rough = species.soldAs === 'rough';
   const what = rough ? `${g.stock.label} ${species.name.toLowerCase()}` : `${species.name}`;
   const sizes = boardsBySize(g).map(({ count: n, size }, i) => {
@@ -103,9 +112,10 @@ export function formatPlan(p: ProjectPlan): string {
 
   const d = s.dimensions;
   const style = String(s.options.tableStyle ?? '');
-  lines.push(
-    `${s.projectType.toUpperCase()}${style ? ` (${style})` : ''} — ${formatLength(d.length, u)} L × ${formatLength(d.width, u)} W × ${formatLength(d.height, u)} H`,
-  );
+  const labels = getProjectType(s.projectType).dimensionLabels?.(s.options) ?? { length: 'Length', width: 'Width', height: 'Height' };
+  const abbr = (label: string | null) => (/depth/i.test(label ?? '') ? 'D' : /width/i.test(label ?? 'width') ? 'W' : 'L');
+  const plan = labels.length === 'Diameter' ? `${formatLength(d.length, u)} diameter` : `${formatLength(d.length, u)} ${abbr(labels.length)} × ${formatLength(d.width, u)} ${abbr(labels.width)}`;
+  lines.push(`${s.projectType.toUpperCase()}${style ? ` (${style})` : ''} — ${plan} × ${formatLength(d.height, u)} H`);
   const joineryApplies = getProjectType(s.projectType).joineryApplies?.(s.options) ?? true;
   lines.push([species.name, ...(joineryApplies ? [JOINERY_LABELS[s.joinery]] : []), FINISH_LABELS[s.finish]].join(' · '));
   hr();
@@ -122,15 +132,15 @@ export function formatPlan(p: ProjectPlan): string {
     if (r.allowanceReason) lines.push(`            (${r.allowanceReason})`);
     for (const n of r.notes) lines.push(`            - ${n}`);
   }
-  for (const a of model.assemblies) {
-    lines.push(`  ${a.name}: ${formatDims(a.finishedSize.thickness, a.finishedSize.width, a.finishedSize.length, u)} — ${a.note}`);
+  for (const { quantity, assembly: a } of groupedAssemblies(model)) {
+    lines.push(`  ${quantity > 1 ? `${quantity} × ` : ''}${a.name}: ${formatDims(a.finishedSize.thickness, a.finishedSize.width, a.finishedSize.length, u)} — ${a.note}`);
   }
   hr();
 
   lines.push('LUMBER SHOPPING LIST');
   for (const l of p.shoppingList) lines.push(`  • ${l}`);
   const t = p.lumber.totals;
-  if (p.lumber.groups.length) {
+  if (p.lumber.groups.some((g) => g.kind === 'lumber')) {
     lines.push(
       `  Total: ~${t.recommendedBoardFeet.toFixed(1)} bd ft ` +
         `(${t.netBoardFeet.toFixed(1)} in parts, ${t.packedBoardFeet.toFixed(1)} after kerf ${formatLength(p.lumber.settings.kerf, u)} and trim, ` +

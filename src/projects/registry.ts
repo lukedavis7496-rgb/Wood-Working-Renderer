@@ -1,5 +1,6 @@
 import { normalizeSpec } from '../core/spec';
 import type { Model, ProjectSpec, ProjectType } from '../core/types';
+import { bookshelf } from './bookshelf/index';
 import { table } from './table/index';
 
 /**
@@ -9,10 +10,11 @@ import { table } from './table/index';
  */
 export const PROJECT_TYPES: Record<string, ProjectType> = {
   [table.id]: table,
+  [bookshelf.id]: bookshelf,
 };
 
 /** Types on the roadmap, listed so the UI can show what's coming. */
-export const PLANNED_TYPES = ['Bookshelf', 'Cabinet', 'Bench'];
+export const PLANNED_TYPES = ['Cabinet', 'Bench'];
 
 export function getProjectType(id: string): ProjectType {
   const t = PROJECT_TYPES[id];

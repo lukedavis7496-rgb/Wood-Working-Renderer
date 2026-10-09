@@ -40,7 +40,25 @@ for (const options of styles)
           { projectType: 'table', units: 'in', dimensions, species, joinery: j, options },
         ]);
 
-describe('every table combination is physically consistent', () => {
+const shelves: Record<string, unknown>[] = [
+  { shelfType: 'adjustable', caseMaterial: 'solid' },
+  { shelfType: 'fixed', caseMaterial: 'plywood', topStyle: 'overhang' },
+  { shelfType: 'adjustable', caseMaterial: 'plywood', backPanel: 'none', kickHeight: 0 },
+];
+const shelfSizes = [
+  { length: 36, width: 12, height: 72 },
+  { length: 30, width: 10, height: 30 },
+  { length: 60, width: 16, height: 84 },
+];
+for (const options of shelves)
+  for (const dimensions of shelfSizes)
+    for (const j of ['dado', 'pocket-screw', 'dowel'] as const)
+      cases.push([
+        `bookshelf ${Object.values(options).join('/')} ${dimensions.length}×${dimensions.width}×${dimensions.height} ${j}`,
+        { projectType: 'bookshelf', units: 'in', dimensions, species: 'white-oak', joinery: j, options },
+      ]);
+
+describe('every project combination is physically consistent', () => {
   it.each(cases)('%s', (_name, spec) => {
     const p = plan(spec);
     const D = p.model.spec.dimensions;

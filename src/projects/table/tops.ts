@@ -42,6 +42,7 @@ export function rectBoardTop(spec: NormalizedSpec): Top {
       cutouts: [],
       placement: { origin: [-L / 2, y0, -W / 2 + i * bw], x: [1, 0, 0], y: [0, 0, 1], z: [0, 1, 0] },
       allowance: { ...TOP_BOARD_ALLOWANCE, reason: n > 1 ? 'oversized for glue-up; trim after' : 'oversized; trim to final size' },
+      panel: { id: 'top', name: 'Top' },
       notes: [],
     });
   }
@@ -106,6 +107,7 @@ export function roundBoardTop(spec: NormalizedSpec): Top {
       cutouts: [],
       placement: { origin: [-R, y0, z0], x: [1, 0, 0], y: [0, 0, 1], z: [0, 1, 0] },
       allowance: { ...TOP_BOARD_ALLOWANCE, reason: 'oversized for glue-up; cut round after' },
+      panel: { id: 'top', name: 'Top' },
       notes: [],
     });
   }
