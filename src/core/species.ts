@@ -43,7 +43,7 @@ export const SPECIES: Record<string, Species> = {
 };
 
 export function getSpecies(id: string): Species {
-  const s = SPECIES[id];
+  const s = Object.hasOwn(SPECIES, id) ? SPECIES[id] : undefined;
   if (!s) throw new Error(`Unknown species "${id}". Known: ${Object.keys(SPECIES).join(', ')}`);
   return s;
 }

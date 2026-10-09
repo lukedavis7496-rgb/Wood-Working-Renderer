@@ -78,7 +78,15 @@ function validateBookshelf(spec: NormalizedSpec): string[] {
   if (L.D < 4) errs.push(`The case needs to be at least ${f(4)} deep.`);
   if (L.interiorTop - L.interiorBottom < 6) errs.push('The case is too short for its top, bottom and kick.');
   else if (L.opening < 4) errs.push(`With ${L.shelfY.length} shelves the openings would be only ${f(Math.max(0, L.opening))} tall; use fewer shelves.`);
-  if (L.o.caseMaterial === 'plywood' && L.o.maxBoardWidth && L.D > 47.75) errs.push('Plywood parts deeper than a 4′ sheet aren\'t possible.');
+  if (L.o.caseMaterial === 'plywood') {
+    // Every case part has to come out of one 4×8 sheet, grain running the long way.
+    const tooBig = (what: string, a: number, b: number, fix: string) => {
+      if (a > SHEET.usableWidth || b > SHEET.usableLength) errs.push(`${what} (${f(a)} × ${f(b)}) won't fit on a 4′ × 8′ plywood sheet; ${fix}.`);
+    };
+    tooBig('The sides', L.D, L.sideHeight, 'make the case shorter or use solid wood');
+    tooBig('The shelves', L.depthFixed, L.Wi + 2 * L.dado, 'make the case narrower or use solid wood');
+    if (L.o.topStyle === 'overhang') tooBig('The top', L.Do, L.Wo, 'reduce the size or the overhang');
+  }
   return errs;
 }
 

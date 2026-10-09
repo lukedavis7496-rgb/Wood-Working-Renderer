@@ -237,13 +237,18 @@ function rightSize(pieces: Piece[], sizes: BoardSize[], kerf: number, stock: Sto
 function planBoards(pieces: Piece[], sizes: BoardSize[], kerf: number, stock: StockThickness): PlannedBoard[] | null {
   // bf here is a score: board feet with a small surcharge on long boards.
   let best: { boards: PlannedBoard[]; bf: number; distinct: number } | null = null;
+  // Different main sizes often produce the same per-board groups of pieces;
+  // right-size each group once.
+  const sized = new Map<string, PlannedBoard | null>();
   for (const main of sizes) {
     const packed = packBoards(pieces, main.usableWidth, main.usableLength, kerf);
     if (!packed) continue;
     const boards: PlannedBoard[] = [];
     for (const b of packed) {
       const own = pieces.filter((p) => b.placements.some((pl) => pl.partId === p.partId));
-      boards.push(rightSize(own, sizes, kerf, stock) ?? { ...b, size: main, boardFeet: boardFeet(stock.nominal, main.width, main.length) });
+      const key = own.map((p) => p.partId).sort().join(',');
+      if (!sized.has(key)) sized.set(key, rightSize(own, sizes, kerf, stock));
+      boards.push(sized.get(key) ?? { ...b, size: main, boardFeet: boardFeet(stock.nominal, main.width, main.length) });
     }
     const bf = boards.reduce((s, b) => s + b.boardFeet * (1 + LONG_BOARD_PENALTY_PER_FOOT * Math.max(0, b.size.length / 12 - 10)), 0);
     const distinct = new Set(boards.map((b) => `${b.size.width}x${b.size.length}`)).size;

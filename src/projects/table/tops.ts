@@ -1,10 +1,8 @@
 import { box, hexaVolume, type Hexa, type Vec3 } from '../../core/geom';
 import { getSpecies } from '../../core/species';
 import type { Assembly, NormalizedSpec, Part, Shape } from '../../core/types';
+import { gluedPanel } from '../shared/panel';
 import { fmt, hasProfile, opts, slabWidthFn, topThickness, wobble } from './common';
-
-/** Oversize for each glue-up board: trimmed off after the panel cures. */
-export const TOP_BOARD_ALLOWANCE = { length: 1, width: 1 / 4 };
 
 export interface Top {
   parts: Part[];
@@ -29,36 +27,23 @@ export function rectBoardTop(spec: NormalizedSpec): Top {
   const { length: L, width: W, height: H } = spec.dimensions;
   const tt = o.topThickness;
   const y0 = H - tt;
-  const n = Math.ceil(W / o.maxTopBoardWidth - 1e-9);
-  const bw = W / n;
-  const parts: Part[] = [];
-  for (let i = 0; i < n; i++) {
-    parts.push({
-      id: `top-${i + 1}`,
+  const panel = gluedPanel(
+    {
+      id: 'top',
+      name: 'Top',
       role: 'top',
-      name: n > 1 ? 'Top board (glue-up)' : 'Top',
       species: spec.species,
-      solids: [{ kind: 'body', hexa: box(0, L, 0, bw, 0, tt) }],
-      cutouts: [],
-      placement: { origin: [-L / 2, y0, -W / 2 + i * bw], x: [1, 0, 0], y: [0, 0, 1], z: [0, 1, 0] },
-      allowance: { ...TOP_BOARD_ALLOWANCE, reason: n > 1 ? 'oversized for glue-up; trim after' : 'oversized; trim to final size' },
-      panel: { id: 'top', name: 'Top' },
-      notes: [],
-    });
-  }
-  return {
-    parts,
-    underside: y0,
-    assembly: {
-      name: 'Top panel',
-      partIds: parts.map((p) => p.id),
-      finishedSize: { thickness: tt, width: W, length: L },
-      note:
-        n > 1
-          ? `Glue ${n} boards edge to edge (alternate growth-ring direction), then flatten and trim to ${f(W)} × ${f(L)}.`
-          : `Trim to ${f(W)} × ${f(L)}.`,
+      plywood: false,
+      width: W,
+      maxBoardWidth: o.maxTopBoardWidth,
+      // Local x along the table's length, y across its width, z up.
+      placement: { origin: [-L / 2, y0, -W / 2], x: [1, 0, 0], y: [0, 0, 1], z: [0, 1, 0] },
+      solids: (a, b) => [{ kind: 'body', hexa: box(0, L, a, b, 0, tt) }],
+      assemblyNote: (n) => `Glue ${n} boards edge to edge (alternate growth-ring direction), then flatten and trim to ${f(W)} × ${f(L)}.`,
     },
-  };
+    { thickness: tt, length: L },
+  );
+  return { parts: panel.parts, assembly: panel.assembly, underside: y0 };
 }
 
 /**
@@ -73,54 +58,40 @@ export function roundBoardTop(spec: NormalizedSpec): Top {
   const R = D / 2;
   const tt = o.topThickness;
   const y0 = H - tt;
-  const n = Math.ceil(D / o.maxTopBoardWidth - 1e-9);
-  const bw = D / n;
   const half = (z: number) => Math.sqrt(Math.max(0, R * R - z * z));
-  const parts: Part[] = [];
-  for (let i = 0; i < n; i++) {
-    const z0 = -R + i * bw;
-    const z1 = z0 + bw;
-    // Band edges: ~1″ bands for a smooth arc, plus z = 0 where the chord peaks.
-    const cuts = new Set<number>([z0, z1]);
-    const bands = Math.max(2, Math.ceil(bw));
-    for (let k = 1; k < bands; k++) cuts.add(z0 + (k * bw) / bands);
-    if (z0 < 0 && z1 > 0) cuts.add(0);
-    const zs = [...cuts].sort((a, b) => a - b);
-    const solids: Shape[] = [];
-    for (let k = 0; k + 1 < zs.length; k++) {
-      const za = zs[k];
-      const zb = zs[k + 1];
-      solids.push({
-        kind: 'body',
-        hexa: hexaFrom((xb, yb, zb_) => {
-          const z = yb ? zb : za;
-          return [R + (xb ? 1 : -1) * half(z), z - z0, zb_ ? tt : 0];
-        }),
-      });
-    }
-    parts.push({
-      id: `top-${i + 1}`,
+  const panel = gluedPanel(
+    {
+      id: 'top',
+      name: 'Top',
       role: 'top',
-      name: 'Top board (glue-up)',
       species: spec.species,
-      solids,
-      cutouts: [],
-      placement: { origin: [-R, y0, z0], x: [1, 0, 0], y: [0, 0, 1], z: [0, 1, 0] },
-      allowance: { ...TOP_BOARD_ALLOWANCE, reason: 'oversized for glue-up; cut round after' },
-      panel: { id: 'top', name: 'Top' },
-      notes: [],
-    });
-  }
-  return {
-    parts,
-    underside: y0,
-    assembly: {
-      name: 'Round top',
-      partIds: parts.map((p) => p.id),
-      finishedSize: { thickness: tt, width: D, length: D },
-      note: `Glue ${n} boards edge to edge, flatten, then cut a ${f(D)} circle (router on a trammel, or bandsaw and flush-trim to a template). Outer boards are shorter because the circle is narrower there.`,
+      plywood: false,
+      width: D,
+      maxBoardWidth: o.maxTopBoardWidth,
+      // Panel local y runs across the circle from one edge (y = 0) to the other.
+      placement: { origin: [-R, y0, -R], x: [1, 0, 0], y: [0, 0, 1], z: [0, 1, 0] },
+      solids: (a, b) => {
+        // Band edges: ~1″ bands for a smooth arc, plus the centre line where the chord peaks.
+        const cuts = new Set<number>([a, b]);
+        const bands = Math.max(2, Math.ceil(b - a));
+        for (let k = 1; k < bands; k++) cuts.add(a + (k * (b - a)) / bands);
+        if (a < R && b > R) cuts.add(R);
+        const ys = [...cuts].sort((p, q) => p - q);
+        return ys.slice(0, -1).map((ya, k) => ({
+          kind: 'body' as const,
+          hexa: hexaFrom((xb, yb, zb) => {
+            const y = yb ? ys[k + 1] : ya;
+            return [R + (xb ? 1 : -1) * half(y - R), y, zb ? tt : 0];
+          }),
+        }));
+      },
+      allowanceReason: 'oversized for glue-up; cut round after',
+      assemblyNote: (n) =>
+        `Glue ${n} boards edge to edge, flatten, then cut a ${f(D)} circle (router on a trammel, or bandsaw and flush-trim to a template). Outer boards are shorter because the circle is narrower there.`,
     },
-  };
+    { thickness: tt, length: D },
+  );
+  return { parts: panel.parts, assembly: panel.assembly && { ...panel.assembly, name: 'Round top' }, underside: y0 };
 }
 
 /**

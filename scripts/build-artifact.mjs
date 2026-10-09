@@ -23,6 +23,8 @@ const files = readdirSync(assets);
 const js = readFileSync(join(assets, files.find((f) => f.endsWith('.js'))), 'utf8');
 const css = readFileSync(join(assets, files.find((f) => f.endsWith('.css'))), 'utf8');
 const html = readFileSync('index.html', 'utf8');
+// The artifact host supplies the document skeleton (doctype, charset and
+// viewport meta), so only the title is carried over from index.html's head.
 const head = html.match(/<title>.*<\/title>/)[0];
 const body = html.match(/<body>([\s\S]*)<\/body>/)[1].replace(/<script type="module"[^>]*><\/script>/, '');
 const cdn = `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}`;

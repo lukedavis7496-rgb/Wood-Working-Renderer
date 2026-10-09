@@ -68,7 +68,7 @@ function update(rerenderForm: boolean): void {
   persist();
   window.clearTimeout(timer);
   timer = window.setTimeout(() => {
-    const { spec, inputErrors } = toSpec(state(), referenceImage);
+    const { spec, inputErrors } = toSpec(state(), referenceImage, !!document.querySelector('#f-width'));
     if (inputErrors.length) {
       showErrors(inputErrors);
     } else {

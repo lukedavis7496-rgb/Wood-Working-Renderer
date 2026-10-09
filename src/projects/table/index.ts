@@ -7,7 +7,7 @@ import { apronBaseSteps, buildApronBase, validateApronBase, type ApronFootprint 
 import { finishStep, fmt, hasProfile, opts, slabPrepSteps, slabWidthAt, slabWidthFn, topThickness, usesApronBase, usesSlab, type TableOptions } from './common';
 import { seasonalMovement, slotLength } from '../../core/movement';
 import { buildPedestal, cleatLength, defaultColumnSize, defaultFootSpan, FOOT_HEIGHT, CLEAT_HEIGHT, pedestalSteps } from './pedestal';
-import { defaultSteelLegWidth, steelLegs, STEEL_LEG_LABELS } from './steelLegs';
+import { defaultSteelLegWidth, HAIRPIN_EDGE_INSET, steelLegs, STEEL_LEG_LABELS } from './steelLegs';
 import { liveEdgeSlab, rectBoardTop, roundBoardTop, roundSlab, type Top } from './tops';
 
 export { resolveTableJoinery } from './apronBase';
@@ -47,12 +47,16 @@ function validateTable(spec: NormalizedSpec): string[] {
   if (usesApronBase(o)) errs.push(...validateApronBase(spec, apronFootprint(spec)));
 
   if (o.tableStyle === 'live-edge') {
-    if (o.narrowWidth > W + 1e-9) errs.push('The narrow end can\'t be wider than the widest width.');
+    if (!hasProfile(o) && o.narrowWidth > W + 1e-9) errs.push('The narrow end can\'t be wider than the widest width.');
     if (o.slabLength < L - 1e-9) errs.push(`Your slab (${f(o.slabLength)}) is shorter than the table length (${f(L)}).`);
     if (H - tt < 6) errs.push('Table is too low for legs under this slab.');
     if (2 * o.steelLegInset > L - 6) errs.push('Legs are set in so far from the ends that they would meet.');
-    if (o.steelLegStyle !== 'hairpin') {
-      const narrowest = Math.min(slabWidthAt(spec, o.steelLegInset), slabWidthAt(spec, L - o.steelLegInset));
+    const narrowest = Math.min(slabWidthAt(spec, o.steelLegInset), slabWidthAt(spec, L - o.steelLegInset));
+    if (o.steelLegStyle === 'hairpin') {
+      // Two 4″ mounting plates side by side, each 2″ in from its edge, plus a gap.
+      const need = 2 * (HAIRPIN_EDGE_INSET + 4) + 1;
+      if (narrowest < need) errs.push(`The slab is ${f(narrowest)} wide where the legs go; hairpins need about ${f(need)}. Use U, trapezoid or X legs.`);
+    } else {
       if (o.steelLegWidth > narrowest - 1)
         errs.push(`${f(o.steelLegWidth)} legs are too wide for the slab where they mount (${f(narrowest)}); keep them at least ${f(0.5)} in from each edge.`);
     }

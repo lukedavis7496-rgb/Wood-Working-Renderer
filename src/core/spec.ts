@@ -99,10 +99,10 @@ export function normalizeSpec(spec: ProjectSpec, type: ProjectType): { spec: Nor
   for (const k of ['length', 'width', 'height'] as const) {
     if (!isPositive(d[k])) problems.push(`dimensions.${k} must be a positive number.`);
   }
-  if (!SPECIES[spec.species]) problems.push(`Unknown species "${spec.species}". Known: ${Object.keys(SPECIES).join(', ')}.`);
+  if (!Object.hasOwn(SPECIES, spec.species)) problems.push(`Unknown species "${spec.species}". Known: ${Object.keys(SPECIES).join(', ')}.`);
 
   const joinery = spec.joinery;
-  if (!(joinery in JOINERY_LABELS)) {
+  if (!Object.hasOwn(JOINERY_LABELS, joinery)) {
     problems.push(`joinery must be one of: ${Object.keys(JOINERY_LABELS).join(', ')}.`);
   } else if (!type.supportedJoinery.includes(joinery)) {
     problems.push(
@@ -112,7 +112,7 @@ export function normalizeSpec(spec: ProjectSpec, type: ProjectType): { spec: Nor
   }
 
   const finish: Finish = spec.finish ?? 'oil';
-  if (!(finish in FINISH_LABELS)) problems.push(`finish must be one of: ${Object.keys(FINISH_LABELS).join(', ')}.`);
+  if (!Object.hasOwn(FINISH_LABELS, finish)) problems.push(`finish must be one of: ${Object.keys(FINISH_LABELS).join(', ')}.`);
 
   if (problems.length) throw new SpecError(problems);
 

@@ -17,7 +17,7 @@ export const PROJECT_TYPES: Record<string, ProjectType> = {
 export const PLANNED_TYPES = ['Cabinet', 'Bench'];
 
 export function getProjectType(id: string): ProjectType {
-  const t = PROJECT_TYPES[id];
+  const t = Object.hasOwn(PROJECT_TYPES, id) ? PROJECT_TYPES[id] : undefined;
   if (!t) {
     throw new Error(`Project type "${id}" isn't supported yet. Available: ${Object.keys(PROJECT_TYPES).join(', ')}.`);
   }

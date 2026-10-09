@@ -23,6 +23,10 @@ export interface PanelSpec {
   solids: (y0: number, y1: number) => Shape[];
   cutouts?: (y0: number, y1: number) => Cutout[];
   notes?: string[];
+  /** Why glue-up boards are oversized (default: trim after glue-up). */
+  allowanceReason?: string;
+  /** Glue-up instructions; default "Glue n boards edge to edge, then trim to size." */
+  assemblyNote?: (boards: number) => string;
 }
 
 /** Extra size per glue-up board, trimmed off after the panel cures. */
@@ -50,7 +54,7 @@ export function gluedPanel(p: PanelSpec, finished: { thickness: number; length: 
       solids: p.solids(y0, y1).map((s) => ({ ...s, hexa: shift(s.hexa) })),
       cutouts: (p.cutouts?.(y0, y1) ?? []).map((c) => ({ ...c, hexa: shift(c.hexa) })),
       placement: { ...p.placement, origin: add(p.placement.origin, scale(p.placement.y, y0)) },
-      allowance: n > 1 ? { ...PANEL_BOARD_ALLOWANCE, reason: 'oversized for glue-up; trim after' } : undefined,
+      allowance: n > 1 ? { ...PANEL_BOARD_ALLOWANCE, reason: p.allowanceReason ?? 'oversized for glue-up; trim after' } : undefined,
       panel: n > 1 ? { id: p.id, name: p.name } : undefined,
       notes: n > 1 ? [] : (p.notes ?? []),
     });
@@ -63,7 +67,7 @@ export function gluedPanel(p: PanelSpec, finished: { thickness: number; length: 
             name: p.name,
             partIds: parts.map((x) => x.id),
             finishedSize: { thickness: finished.thickness, width: p.width, length: finished.length },
-            note: `Glue ${n} boards edge to edge, then trim to size.${p.notes?.length ? ` ${p.notes.join(' ')}` : ''}`,
+            note: `${p.assemblyNote?.(n) ?? `Glue ${n} boards edge to edge, then trim to size.`}${p.notes?.length ? ` ${p.notes.join(' ')}` : ''}`,
           }
         : undefined,
   };

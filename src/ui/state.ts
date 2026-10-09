@@ -27,8 +27,13 @@ export interface Design {
   id: string;
   name: string;
   state: FormState;
-  /** Shop checklist: cut-list letters cut, assembly step indexes done. */
-  checks: { cut: string[]; steps: number[] };
+  /**
+   * Shop checklist. Keyed by what was done, not by position, so ticks stay
+   * on the right part when letters shift, and drop off when a part's size
+   * or an assembly step changes: cut-list rows by name + size + quantity,
+   * steps by their text.
+   */
+  checks: { cut: string[]; steps: string[] };
   updated: number;
 }
 
@@ -69,7 +74,14 @@ export function loadStore(): Store {
     if (raw) {
       const store = JSON.parse(raw) as Store;
       if (store.designs?.length) {
-        for (const d of store.designs) d.state = { ...defaultState(), ...d.state };
+        for (const d of store.designs) {
+          d.state = { ...defaultState(), ...d.state };
+          // Earlier ticks were stored by position; they can't be trusted.
+          d.checks = {
+            cut: (d.checks?.cut ?? []).filter((k) => typeof k === 'string' && k.includes('|')),
+            steps: (d.checks?.steps ?? []).filter((k): k is string => typeof k === 'string'),
+          };
+        }
         if (!store.designs.some((d) => d.id === store.currentId)) store.currentId = store.designs[0].id;
         return store;
       }
@@ -100,7 +112,7 @@ export function currentDesign(store: Store): Design {
 }
 
 /** Turn the form into a spec, plus messages for anything that isn't a readable length. */
-export function toSpec(s: FormState, referenceImage?: string): { spec: ProjectSpec; inputErrors: string[] } {
+export function toSpec(s: FormState, referenceImage?: string, widthShown = true): { spec: ProjectSpec; inputErrors: string[] } {
   const inputErrors: string[] = [];
   const len = (label: string, v: string) => {
     const n = parseLength(v);
@@ -114,7 +126,13 @@ export function toSpec(s: FormState, referenceImage?: string): { spec: ProjectSp
     spec: {
       projectType: s.projectType,
       units: s.units,
-      dimensions: { length: len('Length', s.length), width: len('Width', s.width), height: len('Height', s.height) },
+      // A hidden width (round tables, measured slabs) is derived from other
+      // inputs, so a stale value in it mustn't block the build.
+      dimensions: {
+        length: len('Length', s.length),
+        width: widthShown ? len('Width', s.width) : (parseLength(s.width) ?? parseLength(s.length) ?? 1),
+        height: len('Height', s.height),
+      },
       species: s.species,
       joinery: s.joinery,
       finish: s.finish,

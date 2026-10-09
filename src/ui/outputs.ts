@@ -1,6 +1,7 @@
 import { SPECIES } from '../core/species';
 import { formatBoardLength, formatDims, formatLength } from '../core/units';
 import { groupedAssemblies } from '../output/cutList';
+import { MILLING_ALLOWANCE, ROUGH_EDGE_ALLOWANCE, ROUGH_END_TRIM } from '../output/stock';
 import { boardsBySize, formatBoardWidth, type ProjectPlan } from '../output/plan';
 import { esc } from './form';
 import type { Design } from './state';
@@ -81,7 +82,8 @@ export class Outputs {
   private cutList(p: ProjectPlan): void {
     const u = p.model.spec.units;
     const cut = new Set(this.design().checks.cut);
-    const done = p.cutList.filter((r) => cut.has(r.letter)).length;
+    const keys = p.cutList.map(rowKey);
+    const done = keys.filter((k) => cut.has(k)).length;
     $('#tab-cut').innerHTML = `
       <div class="panel-head">
         <p class="hint">Tap a row to find those parts in the model, or a part in the model to find its row. Tick rows off as you cut them.</p>
@@ -91,8 +93,8 @@ export class Outputs {
         <thead><tr><th><span class="sr-only">Cut</span></th><th>Part</th><th>Qty</th><th>Name</th><th>Thickness</th><th>Width</th><th>Length</th><th>Notes</th></tr></thead>
         <tbody>${p.cutList
           .map(
-            (r) => `<tr data-letter="${r.letter}" tabindex="0"${cut.has(r.letter) ? ' class="done"' : ''}>
-              <td class="check"><input type="checkbox" data-check-cut="${r.letter}" aria-label="Cut ${esc(r.name)} (${r.letter})"${cut.has(r.letter) ? ' checked' : ''}></td>
+            (r, i) => `<tr data-letter="${r.letter}" tabindex="0"${cut.has(keys[i]) ? ' class="done"' : ''}>
+              <td class="check"><input type="checkbox" data-check-cut="${i}" aria-label="Cut ${esc(r.name)} (${r.letter})"${cut.has(keys[i]) ? ' checked' : ''}></td>
               <td><span class="key">${r.letter}</span></td>
               <td class="num">${r.quantity}</td>
               <td>${esc(r.name)}${r.owned ? ' <span class="chip">yours</span>' : ''}</td>
@@ -129,8 +131,8 @@ export class Outputs {
       .forEach((box) =>
         box.addEventListener('change', () => {
           const d = this.design();
-          const letter = box.dataset.checkCut!;
-          d.checks.cut = box.checked ? [...new Set([...d.checks.cut, letter])] : d.checks.cut.filter((l) => l !== letter);
+          const key = keys[Number(box.dataset.checkCut)];
+          d.checks.cut = box.checked ? [...new Set([...d.checks.cut, key])] : d.checks.cut.filter((k) => k !== key);
           this.onChecksChanged();
           this.cutList(p);
           if (this.picked) document.querySelectorAll<HTMLElement>('#tab-cut [data-letter]').forEach((el) => el.classList.toggle('picked', el.dataset.letter === this.picked));
@@ -161,7 +163,16 @@ export class Outputs {
           <tr class="total"><td>Total (bd ft)</td><td></td><td class="num">${t.netBoardFeet.toFixed(1)}</td><td class="num">${t.packedBoardFeet.toFixed(1)}</td><td class="num">${t.recommendedBoardFeet.toFixed(1)}</td><td class="num">$${Math.round(t.cost)}</td></tr>
         </tbody>
       </table></div>
-      <p class="hint">Saw kerf ${formatLength(p.lumber.settings.kerf, u)}. Rough boards lose ${formatLength(1 / 4, u)} in thickness and ${formatLength(1 / 2, u)} in width to milling, plus ${formatLength(1, u)} at each end to checks and snipe. Each board is sized to the pieces it carries. Prices are rough US averages.</p>`
+      <p class="hint">${[
+        `Saw kerf ${formatLength(p.lumber.settings.kerf, u)}.`,
+        p.lumber.groups.some((g) => g.kind === 'lumber' && SPECIES[g.species].soldAs === 'rough')
+          ? `Rough boards lose ${formatLength(MILLING_ALLOWANCE, u)} in thickness and ${formatLength(ROUGH_EDGE_ALLOWANCE, u)} in width to milling, plus ${formatLength(ROUGH_END_TRIM / 2, u)} at each end to checks and snipe.`
+          : '',
+        p.lumber.groups.some((g) => g.kind === 'lumber') ? 'Each board is sized to the pieces it carries.' : '',
+        'Prices are rough US averages.',
+      ]
+        .filter(Boolean)
+        .join(' ')}</p>`
           : ''
       }
       <h3>Hardware</h3>
@@ -170,12 +181,13 @@ export class Outputs {
 
   private assembly(p: ProjectPlan): void {
     const done = new Set(this.design().checks.steps);
-    const count = p.model.assemblySteps.filter((_, i) => done.has(i)).length;
+    const steps = p.model.assemblySteps;
+    const count = steps.filter((s) => done.has(s)).length;
     $('#tab-assembly').innerHTML = `
       <div class="panel-head"><p class="hint">Tick steps off as you go; your progress is saved with this design.</p><span class="progress">${count} of ${p.model.assemblySteps.length} done</span></div>
       <ol class="steps">${p.model.assemblySteps
         .map(
-          (s, i) => `<li${done.has(i) ? ' class="done"' : ''}><label><input type="checkbox" data-check-step="${i}"${done.has(i) ? ' checked' : ''}><span>${esc(s)}</span></label></li>`,
+          (s, i) => `<li${done.has(s) ? ' class="done"' : ''}><label><input type="checkbox" data-check-step="${i}"${done.has(s) ? ' checked' : ''}><span>${esc(s)}</span></label></li>`,
         )
         .join('')}</ol>`;
     $('#tab-assembly')
@@ -183,13 +195,18 @@ export class Outputs {
       .forEach((box) =>
         box.addEventListener('change', () => {
           const d = this.design();
-          const i = Number(box.dataset.checkStep);
-          d.checks.steps = box.checked ? [...new Set([...d.checks.steps, i])] : d.checks.steps.filter((n) => n !== i);
+          const step = steps[Number(box.dataset.checkStep)];
+          d.checks.steps = box.checked ? [...new Set([...d.checks.steps, step])] : d.checks.steps.filter((s) => s !== step);
           this.onChecksChanged();
           this.assembly(p);
         }),
       );
   }
+}
+
+/** What a cut-list row is, independent of its letter: name, size and count. */
+function rowKey(r: ProjectPlan['cutList'][number]): string {
+  return [r.name, r.size.thickness.toFixed(3), r.size.width.toFixed(3), r.size.length.toFixed(3), r.quantity].join('|');
 }
 
 function cuttingDiagrams(p: ProjectPlan): string {

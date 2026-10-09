@@ -1,4 +1,4 @@
-import { optionVisible } from '../core/spec';
+import { DEFAULT_KERF_IN, optionVisible } from '../core/spec';
 import { SPECIES } from '../core/species';
 import type { Finish, Joinery, OptionField } from '../core/types';
 import { FINISH_LABELS, JOINERY_LABELS } from '../core/types';
@@ -141,7 +141,7 @@ export function renderForm(root: HTMLElement, store: Store, plan: ProjectPlan | 
     </fieldset>
     <details>
       <summary>Lumber planning</summary>
-      ${field('kerf', `Saw kerf (${unitLabel})`, lengthInput('kerf', state.kerf, `auto: ${formatLength(1 / 8, unit).replace('″', '')}`))}
+      ${field('kerf', `Saw kerf (${unitLabel})`, lengthInput('kerf', state.kerf, `auto: ${formatLength(DEFAULT_KERF_IN, unit).replace('″', '')}`))}
       ${field('overage', 'Overage for defects (%)', `<input id="${idFor('overage')}" type="number" min="0" max="100" step="1" name="overage" value="${esc(state.overage)}">`, 'Added on top of kerf and trim waste. 15–20% is typical.')}
     </details>`;
 }
