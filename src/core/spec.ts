@@ -121,14 +121,14 @@ export function normalizeSpec(spec: ProjectSpec, type: ProjectType): { spec: Nor
     width: toInches(d.width, units),
     height: toInches(d.height, units),
   };
-  let options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery }, problems, warnings);
+  let options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery, species: spec.species }, problems, warnings);
   // Some options decide the overall size (a round top's diameter, a measured
   // slab's widest point). Apply that, then re-resolve defaults that depend on it.
   if (type.deriveDimensions && !problems.length) {
     const derived = type.deriveDimensions({ ...dimensions }, options);
     if (derived.length !== dimensions.length || derived.width !== dimensions.width || derived.height !== dimensions.height) {
       Object.assign(dimensions, derived);
-      options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery }, problems, []);
+      options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery, species: spec.species }, problems, []);
     }
   }
 

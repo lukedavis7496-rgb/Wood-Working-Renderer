@@ -20,7 +20,7 @@ export function cutSize(part: Part): CutSize {
   return {
     length: bb.max[0] - bb.min[0] + (part.allowance?.length ?? 0),
     width: bb.max[1] - bb.min[1] + (part.allowance?.width ?? 0),
-    thickness: bb.max[2] - bb.min[2],
+    thickness: bb.max[2] - bb.min[2] + (part.allowance?.thickness ?? 0),
   };
 }
 
@@ -47,6 +47,8 @@ export interface CutListRow {
   allowanceReason?: string;
   /** The maker already has this piece (e.g. their slab). */
   owned: boolean;
+  /** Small enough to cut from an offcut; not on the lumber list. */
+  scrap: boolean;
 }
 
 /** 0 → A, 25 → Z, 26 → AA. */
@@ -84,6 +86,7 @@ export function cutList(model: Model): CutListRow[] {
         notes: part.notes,
         allowanceReason: part.allowance?.reason,
         owned: part.sourcing === 'owned',
+        scrap: part.sourcing === 'scrap',
       });
     }
   }

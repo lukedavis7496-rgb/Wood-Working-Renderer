@@ -20,6 +20,8 @@ const styles: Record<string, unknown>[] = [
   { tableStyle: 'round', roundBase: 'pedestal', roundTop: 'slab' },
   { tableStyle: 'round', roundBase: 'four-legs', roundTop: 'boards' },
   { tableStyle: 'round', roundBase: 'four-legs', roundTop: 'slab' },
+  { tableStyle: 'live-edge', steelLegStyle: 'u', butterflyCount: 2 },
+  { tableStyle: 'round', roundBase: 'pedestal', roundTop: 'slab', butterflyCount: 2, butterflyLength: 3 },
 ];
 const sizes = [
   { length: 96, width: 42, height: 30 },
@@ -75,9 +77,23 @@ describe('every project combination is physically consistent', () => {
         expect(Math.max(Math.abs(b.min[2]), Math.abs(b.max[2])), `${part.id} past the sides`).toBeLessThanOrEqual(D.width / 2 + e);
       }
     for (let i = 0; i < parts.length; i++)
-      for (let k = i + 1; k < parts.length; k++)
-        for (const a of parts[i].bodies)
-          for (const b of parts[k].bodies) expect(aabbOverlap(a, b, 1e-4), `${parts[i].part.id} overlaps ${parts[k].part.id}`).toBe(false);
+      for (let k = i + 1; k < parts.length; k++) {
+        const [a, b] = [parts[i].part, parts[k].part];
+        // An inlay (butterfly key) sits inside its host by design; it must sit in a mortise there instead.
+        if (a.inlay?.host === b.id || b.inlay?.host === a.id) continue;
+        for (const x of parts[i].bodies)
+          for (const y of parts[k].bodies) expect(aabbOverlap(x, y, 1e-4), `${a.id} overlaps ${b.id}`).toBe(false);
+      }
+    for (const { part, bodies } of parts.filter((p) => p.part.inlay)) {
+      const host = p.model.parts.find((x) => x.id === part.inlay!.host)!;
+      const mortises = host.cutouts.map((c) => aabbOf(c.hexa.map((v) => toWorld(host.placement, v))));
+      const e = 1e-6;
+      for (const b of bodies)
+        expect(
+          mortises.some((m) => [0, 1, 2].every((k) => b.min[k] >= m.min[k] - e && b.max[k] <= m.max[k] + e)),
+          `${part.id} sits in a mortise in ${host.id}`,
+        ).toBe(true);
+    }
     for (const r of p.cutList) expect(Math.min(r.size.length, r.size.width, r.size.thickness)).toBeGreaterThan(0);
     expect(Number.isFinite(p.totalCost) && Number.isFinite(p.weightLb)).toBe(true);
   });

@@ -98,7 +98,7 @@ export class Outputs {
               <td class="check"><input type="checkbox" data-check-cut="${i}" aria-label="Cut ${esc(r.name)} (${r.letter})"${cut.has(keys[i]) ? ' checked' : ''}></td>
               <td><span class="key">${r.letter}</span></td>
               <td class="num">${r.quantity}</td>
-              <td>${esc(r.name)}${r.owned ? ' <span class="chip">yours</span>' : ''}</td>
+              <td>${esc(r.name)}${r.owned ? ' <span class="chip">yours</span>' : ''}${r.scrap ? ' <span class="chip">offcut</span>' : ''}</td>
               <td class="num">${formatLength(r.size.thickness, u)}</td>
               <td class="num">${formatLength(r.size.width, u)}</td>
               <td class="num">${formatLength(r.size.length, u)}</td>

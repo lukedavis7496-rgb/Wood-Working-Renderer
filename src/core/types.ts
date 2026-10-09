@@ -66,6 +66,7 @@ interface OptionBase {
 export interface DefaultCtx {
   dimensions: { length: number; width: number; height: number };
   joinery: Joinery;
+  species: string;
   options: Record<string, unknown>;
 }
 
@@ -108,8 +109,8 @@ export interface Part {
   solids: Shape[];
   cutouts: Cutout[];
   placement: Placement;
-  /** Extra size at cut time beyond the finished geometry (e.g. glue-up boards). */
-  allowance?: { length: number; width: number; reason: string };
+  /** Extra size at cut time beyond the finished geometry (e.g. glue-up boards, a key left proud). */
+  allowance?: { length: number; width: number; thickness?: number; reason: string };
   /** Shaping/machining notes that don't change the blank size (tapers, mortises). */
   notes: string[];
   /**
@@ -121,8 +122,13 @@ export interface Part {
   panel?: { id: string; name: string };
   /** Grain direction doesn't matter (a plywood back): may be turned to fit a sheet. */
   rotatable?: boolean;
-  /** 'owned': material the maker already has (e.g. their slab) — not on the lumber list. */
-  sourcing?: 'owned';
+  /**
+   * Not bought as listed lumber: 'owned' is something the maker already has
+   * (their slab); 'scrap' is small enough to come from an offcut (keys).
+   */
+  sourcing?: 'owned' | 'scrap';
+  /** Set into a mortise in another part (a butterfly key in its slab): it sits inside that part by design. */
+  inlay?: { host: string };
 }
 
 export interface Joint {

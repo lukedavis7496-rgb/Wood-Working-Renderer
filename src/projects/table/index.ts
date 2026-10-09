@@ -9,7 +9,9 @@ import { seasonalMovement, slotLength } from '../../core/movement';
 import { buildPedestal, cleatLength, defaultColumnSize, defaultFootSpan, FOOT_HEIGHT, CLEAT_HEIGHT, pedestalSteps } from './pedestal';
 import { defaultSteelLegWidth, HAIRPIN_EDGE_INSET, steelLegs, STEEL_LEG_LABELS } from './steelLegs';
 import { chairGhosts, DINING_HEIGHT, KNEE_ROOM_MIN, recommendedSeating, seatingFor, SEAT_WIDTH_MIN, type Seating } from './seating';
+import { butterflyKeys, butterflySteps, keyPositions, keySize } from './butterflies';
 import { liveEdgeSlab, rectBoardTop, roundBoardTop, roundSlab, type Top } from './tops';
+import { SPECIES } from '../../core/species';
 
 export { resolveTableJoinery } from './apronBase';
 
@@ -62,10 +64,32 @@ function validateTable(spec: NormalizedSpec): string[] {
         errs.push(`${f(o.steelLegWidth)} legs are too wide for the slab where they mount (${f(narrowest)}); keep them at least ${f(0.5)} in from each edge.`);
     }
   }
+  if (usesSlab(o)) errs.push(...validateKeys(spec));
   if (o.tableStyle === 'round' && o.roundBase === 'pedestal') {
     if (H - tt - FOOT_HEIGHT - CLEAT_HEIGHT < 6) errs.push('Table is too low for a pedestal.');
     if (o.footSpan > L) errs.push('Feet are wider than the top.');
   }
+  return errs;
+}
+
+function validateKeys(spec: NormalizedSpec): string[] {
+  const o = opts(spec);
+  const f = fmt(spec);
+  const L = spec.dimensions.length;
+  const at = keyPositions(o.butterflyCount, o.butterflyPositions, L);
+  if (!at.length) return [];
+  const k = keySize(o.butterflyLength, o.butterflyThickness);
+  const errs: string[] = [];
+  const slabWidth =
+    o.tableStyle === 'round' ? (x: number) => 2 * Math.sqrt(Math.max(0, (L / 2) ** 2 - (x - L / 2) ** 2)) : (x: number) => slabWidthAt(spec, x);
+  if (o.butterflyThickness > topThickness(o) / 2) errs.push(`Butterfly keys over half the slab's thickness (${f(topThickness(o) / 2)}) weaken it more than they hold it.`);
+  if (k.waist < 0.375) errs.push(`Butterfly keys under ${f(3)} long have too thin a waist; make them longer.`);
+  for (const x of at) {
+    if (x < k.width / 2 + 0.5 || x > L - k.width / 2 - 0.5) errs.push(`A butterfly key at ${f(x)} hangs off the end of the slab.`);
+    else if (k.length > slabWidth(x) - 4) errs.push(`A ${f(k.length)} butterfly key at ${f(x)} is too long for the slab's ${f(slabWidth(x))} width there.`);
+  }
+  const sorted = [...at].sort((a, b) => a - b);
+  if (sorted.some((x, i) => i > 0 && x - sorted[i - 1] < k.width + 0.5)) errs.push(`Butterfly keys need at least ${f(k.width + 0.5)} between their centres.`);
   return errs;
 }
 
@@ -103,6 +127,9 @@ function buildTable(spec: NormalizedSpec): Model {
     steps.push(boards ? 'Cut every part to the cut-list size. Leave the top boards oversized as listed.' : 'Cut every base part to the cut-list size.');
   }
   if (boards > 1) steps.push(`Glue up the ${boards} top boards edge to edge, alternating growth rings. Set aside to cure overnight.`);
+  // Butterfly keys inlaid across checks in a slab top.
+  const keyAt = usesSlab(o) ? keyPositions(o.butterflyCount, o.butterflyPositions, L) : [];
+  const keys = keyAt.length ? butterflyKeys(spec, top.parts[0], L, spec.dimensions.height) : [];
   if (usesSlab(o)) {
     steps.push(
       ...slabPrepSteps(
@@ -110,6 +137,7 @@ function buildTable(spec: NormalizedSpec): Model {
         o.tableStyle === 'live-edge' && o.slabLength > L + 1e-9
           ? `Square the ends with a track saw or a router against a straightedge, trimming ${f(o.slabLength)} down to ${f(L)}.`
           : undefined,
+        keyAt.length ? butterflySteps(spec, keyAt) : undefined,
       ),
     );
   }
@@ -179,7 +207,7 @@ function buildTable(spec: NormalizedSpec): Model {
     warnings.push(`The slab weighs about ${Math.round(top.weight)} lb finished. Line up a helper (or a slab cart) for every flip and move.`);
   }
 
-  const ordered = top.parts[0].sourcing === 'owned' ? [...top.parts, ...parts] : [...parts, ...top.parts];
+  const ordered = top.parts[0].sourcing === 'owned' ? [...top.parts, ...keys, ...parts] : [...parts, ...top.parts];
   return {
     spec,
     parts: ordered,
@@ -307,6 +335,55 @@ export const table: ProjectType = {
       min: 0,
       showIf: slabTop,
       help: 'Total off both faces on the router sled. More for a cupped or twisted slab.',
+    },
+    // ---- Butterfly keys -----------------------------------------------------
+    {
+      key: 'butterflyCount', group: 'Butterfly keys',
+      label: 'Number of keys',
+      kind: 'number',
+      default: 0,
+      min: 0,
+      max: 12,
+      showIf: slabTop,
+      help: 'Bowtie keys across checks. Without positions they go 6″ in from alternate ends, on the centreline.',
+    },
+    {
+      key: 'butterflyPositions', group: 'Butterfly keys',
+      label: 'Key positions from the first end',
+      kind: 'lengthList',
+      default: [],
+      placeholder: 'e.g. 5, 12, 78',
+      showIf: slabTop,
+      help: 'Optional: where your checks are, measured to the centre of each key. Overrides the number above.',
+    },
+    {
+      key: 'butterflySpecies', group: 'Butterfly keys',
+      label: 'Key wood',
+      kind: 'select',
+      // Contrast with the slab: pale maple keys in walnut, walnut keys in anything else.
+      default: (c) => (c.species === 'walnut' ? 'hard-maple' : 'walnut'),
+      choices: Object.values(SPECIES).map((sp) => choice(sp.id, sp.name)),
+      showIf: (o) => slabTop(o) && (Number(o.butterflyCount) > 0 || (Array.isArray(o.butterflyPositions) && o.butterflyPositions.length > 0)),
+      help: 'A contrasting wood shows the keys off; the same wood hides them.',
+    },
+    {
+      key: 'butterflyLength', group: 'Butterfly keys',
+      label: 'Key length',
+      kind: 'length',
+      default: 4,
+      min: 2,
+      max: 10,
+      showIf: (o) => slabTop(o) && (Number(o.butterflyCount) > 0 || (Array.isArray(o.butterflyPositions) && o.butterflyPositions.length > 0)),
+    },
+    {
+      key: 'butterflyThickness', group: 'Butterfly keys',
+      label: 'Key thickness',
+      kind: 'length',
+      default: 0.5,
+      min: 0.25,
+      max: 1,
+      showIf: (o) => slabTop(o) && (Number(o.butterflyCount) > 0 || (Array.isArray(o.butterflyPositions) && o.butterflyPositions.length > 0)),
+      help: 'Structural keys are 5/16″–1/2″ thick; the mortise is 1/16″ shallower so the key can be sanded flush.',
     },
     // ---- Steel legs --------------------------------------------------------
     {

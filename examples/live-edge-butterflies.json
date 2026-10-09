@@ -1,0 +1,15 @@
+{
+  "projectType": "table",
+  "units": "in",
+  "dimensions": { "length": 84, "width": 40, "height": 30 },
+  "species": "walnut",
+  "joinery": "mortise-tenon",
+  "options": {
+    "tableStyle": "live-edge",
+    "widthProfile": "38-1/2, 40, 37, 35-1/2, 36, 33",
+    "slabLength": 90,
+    "slabThickness": 2.5,
+    "butterflyPositions": "5, 12, 78"
+  },
+  "finish": "oil"
+}

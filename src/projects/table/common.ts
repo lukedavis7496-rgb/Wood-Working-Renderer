@@ -22,6 +22,12 @@ export interface TableOptions {
   slabLength: number;
   slabThickness: number;
   flattenAllowance: number;
+  // Butterfly keys (slab tops)
+  butterflyCount: number;
+  butterflyPositions: number[];
+  butterflySpecies: string;
+  butterflyLength: number;
+  butterflyThickness: number;
   // Bought steel legs (live edge)
   steelLegStyle: SteelLegStyle;
   steelLegInset: number;
@@ -126,7 +132,7 @@ export function finishStep(spec: NormalizedSpec): string {
 }
 
 /** Preparing a slab you already own: dry it, flatten it, stabilise it. */
-export function slabPrepSteps(spec: NormalizedSpec, trimTo?: string): string[] {
+export function slabPrepSteps(spec: NormalizedSpec, trimTo?: string, keySteps?: string[]): string[] {
   const o = opts(spec);
   const f = fmt(spec);
   return [
@@ -134,7 +140,7 @@ export function slabPrepSteps(spec: NormalizedSpec, trimTo?: string): string[] {
     'Knock off loose bark and clean the live edge with a drawknife and a stiff wire brush down to firm wood.',
     `Flatten both faces on a router sled, about ${f(o.flattenAllowance / 2)} off each face, to a finished ${f(topThickness(o))}.`,
     ...(trimTo ? [trimTo] : []),
-    'Stabilise checks with butterfly keys across the crack, and fill voids and loose knots with epoxy. Let it cure fully.',
+    ...(keySteps?.length ? keySteps : ['Stabilise checks with butterfly keys across the crack, and fill voids and loose knots with epoxy. Let it cure fully.']),
     'Sand the faces 80 → 120 → 180 (220 for an oil finish); sand the live edge by hand to keep its shape.',
   ];
 }

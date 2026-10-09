@@ -90,6 +90,12 @@ export function toWorld(pl: Placement, p: Vec3): Vec3 {
   return add(pl.origin, add(scale(pl.x, p[0]), add(scale(pl.y, p[1]), scale(pl.z, p[2]))));
 }
 
+/** World point → a placement's local frame (placement axes are orthonormal). */
+export function toLocal(pl: Placement, p: Vec3): Vec3 {
+  const d = sub(p, pl.origin);
+  return [dot(d, pl.x), dot(d, pl.y), dot(d, pl.z)];
+}
+
 /** -1 when the placement mirrors (left-handed), which flips face winding. */
 export function handedness(pl: Placement): 1 | -1 {
   return dot(cross(pl.x, pl.y), pl.z) < 0 ? -1 : 1;

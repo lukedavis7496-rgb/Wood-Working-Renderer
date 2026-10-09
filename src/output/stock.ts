@@ -289,7 +289,7 @@ export function sheetPrice(species: Species, thickness: number): number {
 function planSheets(model: Model, kerf: number): StockGroup[] {
   const byGroup = new Map<string, { species: Species; thickness: number; pieces: Piece[] }>();
   for (const part of model.parts) {
-    if (part.material !== 'plywood' || part.sourcing === 'owned') continue;
+    if (part.material !== 'plywood' || part.sourcing) continue;
     const species = getSpecies(part.species);
     const size = cutSize(part);
     const k = `${species.id}/${size.thickness}`;
@@ -334,7 +334,7 @@ export function planLumber(model: Model): LumberPlan {
   const { kerf, overage } = model.spec.stock;
   const byGroup = new Map<string, { species: Species; stock: StockThickness; pieces: Piece[] }>();
   for (const part of model.parts) {
-    if (part.material === 'steel' || part.material === 'plywood' || part.sourcing === 'owned') continue;
+    if (part.material === 'steel' || part.material === 'plywood' || part.sourcing) continue;
     const species = getSpecies(part.species);
     const size = cutSize(part);
     const stock = stockThicknessFor(size.thickness, species);

@@ -4,7 +4,7 @@ import type { Model, ProjectSpec } from '../core/types';
 import { FINISH_LABELS, JOINERY_LABELS } from '../core/types';
 import { formatBoardLength, formatDims, formatLength, type Unit } from '../core/units';
 import { buildModel, getProjectType } from '../projects/registry';
-import { cutList, finishedWeight, groupedAssemblies, lettersByPart, type CutListRow } from './cutList';
+import { cutList, cutSize, finishedWeight, groupedAssemblies, lettersByPart, type CutListRow } from './cutList';
 import { planLumber, type BoardSize, type LumberPlan, type StockGroup } from './stock';
 
 export interface ProjectPlan {
@@ -30,6 +30,7 @@ export function plan(spec: ProjectSpec): ProjectPlan {
   const owned = model.parts.filter((p) => p.sourcing === 'owned');
   const shoppingList = [
     ...owned.map((p) => `${p.name}: you have it — nothing to buy for the top.`),
+    ...scrapLines(model, u),
     ...lumber.groups.map((g) => shoppingLine(g, u)),
     ...priced.map((h) => `${count(h.quantity)} ${/^[A-Z][a-z]/.test(h.item) ? h.item.charAt(0).toLowerCase() + h.item.slice(1) : h.item} (~$${Math.round(h.quantity * h.unitCost!)}).`),
   ];
@@ -45,6 +46,26 @@ export function plan(spec: ProjectSpec): ProjectPlan {
     totalCost: lumber.totals.cost + hardwareCost,
     weightLb: finishedWeight(model),
   };
+}
+
+/** Small parts from offcuts: one line per species saying what size of scrap covers them. */
+function scrapLines(model: Model, u: Unit): string[] {
+  const bySpecies = new Map<string, { names: Set<string>; thickness: number; width: number; length: number; count: number }>();
+  for (const p of model.parts.filter((x) => x.sourcing === 'scrap')) {
+    const s = cutSize(p);
+    const g = bySpecies.get(p.species) ?? { names: new Set(), thickness: 0, width: 0, length: 0, count: 0 };
+    g.names.add(p.name);
+    g.thickness = Math.max(g.thickness, s.thickness);
+    g.width = Math.max(g.width, s.width);
+    // Keys are sawn one after another from a strip, a kerf and a little waste apart.
+    g.length += s.length + 1 / 2;
+    g.count++;
+    bySpecies.set(p.species, g);
+  }
+  return [...bySpecies].map(([species, g]) => {
+    const what = [...g.names].map((n) => `${n.toLowerCase()}s`).join(' and ');
+    return `For the ${g.count} ${what}: an offcut of ${getSpecies(species).name.toLowerCase()} at least ${formatLength(g.thickness, u)} thick, ${formatLength(g.width + 1 / 4, u)} wide and ${formatLength(g.length, u)} long.`;
+  });
 }
 
 const numberWords = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
