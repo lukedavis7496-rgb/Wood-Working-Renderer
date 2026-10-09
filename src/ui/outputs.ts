@@ -70,7 +70,7 @@ export class Outputs {
     const extra = [owned ? 'plus your slab' : '', sheets ? `plus ${sheets} sheet${sheets > 1 ? 's' : ''} of plywood` : ''].filter(Boolean).join(', ');
     $('#summary').innerHTML = `
       <div class="stat"><span>Lumber to buy</span><strong>${hasLumber ? `~${t.recommendedBoardFeet.toFixed(1)} bd ft` : 'None'}</strong>${extra ? `<small>${extra}</small>` : ''}</div>
-      <div class="stat"><span>Est. cost</span><strong>~$${Math.round(p.totalCost)}</strong>${p.hardwareCost ? `<small>incl. ~$${Math.round(p.hardwareCost)} steel legs</small>` : '<small>lumber only</small>'}</div>
+      <div class="stat"><span>Est. cost</span><strong>~$${Math.round(p.totalCost)}</strong>${p.hardwareCost ? `<small>incl. ~$${Math.round(p.hardwareCost)} steel legs</small>` : `<small>${sheets ? 'lumber and plywood' : 'lumber'}; hardware extra</small>`}</div>
       <div class="stat"><span>Wood pieces</span><strong>${pieces}</strong><small>${p.cutList.length} different</small></div>
       <div class="stat"><span>Finished weight</span><strong>~${Math.round(p.weightLb)} lb</strong></div>
       ${mv ? `<div class="stat"><span>Seasonal movement</span><strong>~${formatLength(mv.amount, u)}</strong><small>across the ${formatLength(mv.width, u)} top</small></div>` : ''}`;

@@ -320,7 +320,8 @@ function buildBookshelf(spec: NormalizedSpec): Model {
   if (adjustable.length) hardware.push({ item: `${f(PIN_DIAMETER)} shelf pins`, quantity: adjustable.length * 4 });
   if (plywood) {
     const edges = 2 * L.sideHeight + captured.length * Wi + adjustable.length * adjLen + (o.topStyle === 'overhang' ? L.Wo + 2 * L.Do : 0) + (kick ? Wi : 0);
-    hardware.push({ item: 'Iron-on veneer edge banding', quantity: Math.ceil((edges * 1.1) / 12), note: `feet, ${species.name.toLowerCase()}, for the exposed plywood edges` });
+    const banding = spec.units === 'mm' ? `${Math.ceil((edges * 1.1 * 25.4) / 1000)} m` : `${Math.ceil((edges * 1.1) / 12)} ft`;
+    hardware.push({ item: `Iron-on ${species.name.toLowerCase()} veneer edge banding, ${banding}`, quantity: 1, note: 'for the exposed plywood edges, with 10% spare' });
   }
   hardware.push({ item: 'Wood glue', quantity: 1 });
   if (H > 30) hardware.push({ item: 'Anti-tip furniture strap', quantity: 1, note: 'or a screw through the back into a wall stud' });
@@ -330,7 +331,7 @@ function buildBookshelf(spec: NormalizedSpec): Model {
   if (worst && worst.sag > worst.limit) {
     warnings.push(
       `Shelves will sag about ${small(worst.sag)} under ${SHELF_LOADS[o.shelfLoad].label.toLowerCase()}, more than the ${small(worst.limit)} that looks right over a ${f(Wi)} span. ` +
-        `Keep spans under ${f(floorToSixteenth(worst.maxSpan))}, use thicker shelves, or glue a 3/4″ × 1-1/2″ strip under the front edge.`,
+        `Keep spans under ${f(floorToSixteenth(worst.maxSpan))}, use thicker shelves, or glue a ${f(3 / 4)} × ${f(1.5)} strip under the front edge.`,
     );
   }
   if (o.shelfType === 'adjustable' && L.fixed.some(Boolean)) {
