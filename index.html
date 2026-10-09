@@ -12,11 +12,16 @@
       <div class="topbar-actions">
         <span id="copy-status" class="copy-status" aria-live="polite"></span>
         <button id="copy-spec" type="button" title="Copy your settings as JSON, for npm run plan">Copy spec</button>
-        <button id="reset-form" type="button">Reset</button>
+        <button id="reset-form" type="button" title="Put this design back to the starting values">Reset</button>
       </div>
     </header>
+    <nav class="mobile-switch" aria-label="Show">
+      <button type="button" data-view="results" aria-pressed="true">Model &amp; plans</button>
+      <button type="button" data-view="edit" aria-pressed="false">Edit design</button>
+    </nav>
     <main class="layout">
       <aside class="sidebar">
+        <div id="form-errors" class="errors" role="status" hidden></div>
         <form id="form" autocomplete="off" onsubmit="return false"></form>
         <textarea id="spec-json" class="spec-json" rows="12" readonly hidden></textarea>
       </aside>
@@ -34,12 +39,15 @@
         </div>
         <div id="summary" class="summary"></div>
         <ul id="warnings" class="warnings" hidden></ul>
-        <nav class="tabs" role="tablist">
-          <button role="tab" aria-selected="true" aria-controls="tab-cut">Cut list</button>
-          <button role="tab" aria-selected="false" aria-controls="tab-shopping">Shopping list</button>
-          <button role="tab" aria-selected="false" aria-controls="tab-diagram">Cutting diagrams</button>
-          <button role="tab" aria-selected="false" aria-controls="tab-assembly">Assembly order</button>
-        </nav>
+        <div class="tabs-row">
+          <nav class="tabs" role="tablist">
+            <button role="tab" aria-selected="true" aria-controls="tab-cut">Cut list</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-shopping">Shopping list</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-diagram">Cutting diagrams</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-assembly">Assembly order</button>
+          </nav>
+          <button id="clear-checks" type="button" class="quiet" title="Untick every cut and step for this design">Clear ticks</button>
+        </div>
         <div id="tab-cut" role="tabpanel"></div>
         <div id="tab-shopping" role="tabpanel" hidden></div>
         <div id="tab-diagram" role="tabpanel" hidden></div>

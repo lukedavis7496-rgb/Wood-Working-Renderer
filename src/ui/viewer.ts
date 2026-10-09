@@ -241,8 +241,11 @@ export class Viewer {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = size.length() / 2;
-    const dist = radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    this.camera.position.copy(center).add(new THREE.Vector3(0.75, 0.55, 1).normalize().multiplyScalar(dist * 0.9));
+    // Fit whichever way is tighter: tall phone screens are limited by width.
+    const vFov = THREE.MathUtils.degToRad(this.camera.fov);
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect);
+    const dist = radius / Math.sin(Math.min(vFov, hFov) / 2);
+    this.camera.position.copy(center).add(new THREE.Vector3(0.75, 0.55, 1).normalize().multiplyScalar(dist * (this.camera.aspect >= 1 ? 0.9 : 1.05)));
     this.camera.near = dist / 100;
     this.camera.far = dist * 10;
     this.camera.updateProjectionMatrix();
