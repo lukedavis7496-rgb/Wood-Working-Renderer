@@ -16,6 +16,8 @@ export interface TableOptions {
   roundTop: 'boards' | 'slab';
   roundBase: 'pedestal' | 'four-legs';
   // Slab tops (live edge, round slab)
+  /** Widths measured at even spacing from one end of the finished slab to the other; [] if not given. */
+  widthProfile: number[];
   narrowWidth: number;
   slabLength: number;
   slabThickness: number;
@@ -54,6 +56,33 @@ export const usesSlab = (o: Pick<TableOptions, 'tableStyle' | 'roundTop'>) =>
 
 export const usesApronBase = (o: Pick<TableOptions, 'tableStyle' | 'roundBase'>) =>
   o.tableStyle === 'classic' || (o.tableStyle === 'round' && o.roundBase === 'four-legs');
+
+export const hasProfile = (o: Pick<TableOptions, 'tableStyle' | 'widthProfile'>) =>
+  o.tableStyle === 'live-edge' && Array.isArray(o.widthProfile) && o.widthProfile.length >= 2;
+
+/**
+ * Nominal slab width at distance x from the first end. With measurements,
+ * widths blend between stations along a cosine curve, which passes through
+ * every measurement and never overshoots them; without, the slab tapers
+ * straight from the widest end to the narrow end.
+ */
+export function slabWidthFn(L: number, W: number, o: Pick<TableOptions, 'tableStyle' | 'widthProfile' | 'narrowWidth'>): (x: number) => number {
+  if (hasProfile(o)) {
+    const p = o.widthProfile;
+    const step = L / (p.length - 1);
+    return (x: number) => {
+      const t = Math.min(Math.max(x / step, 0), p.length - 1);
+      const i = Math.min(Math.floor(t), p.length - 2);
+      const u = (1 - Math.cos(Math.PI * (t - i))) / 2;
+      return p[i] + (p[i + 1] - p[i]) * u;
+    };
+  }
+  return (x: number) => W + ((o.narrowWidth - W) * x) / L;
+}
+
+export function slabWidthAt(spec: NormalizedSpec, x: number): number {
+  return slabWidthFn(spec.dimensions.length, spec.dimensions.width, opts(spec))(x);
+}
 
 /** Finished top thickness: a slab loses its flattening allowance. */
 export function topThickness(o: TableOptions): number {

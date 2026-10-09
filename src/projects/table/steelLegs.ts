@@ -1,6 +1,6 @@
 import { box, mapHexa, type Hexa } from '../../core/geom';
 import type { HardwareItem, NormalizedSpec, Part, Shape } from '../../core/types';
-import { fmt, opts, type SteelLegStyle } from './common';
+import { fmt, opts, slabWidthAt, type SteelLegStyle } from './common';
 
 /**
  * Bought steel legs under a slab. They are not cut parts: they appear in the
@@ -21,15 +21,8 @@ const HAIRPIN_ROD = 1 / 2;
 /** Hairpins sit this far in from the slab's edges. */
 export const HAIRPIN_EDGE_INSET = 2;
 
-/** Nominal slab width at distance x from the wide end. */
-export function slabWidthAt(spec: NormalizedSpec, x: number): number {
-  const { length: L, width: W } = spec.dimensions;
-  return W + ((opts(spec).narrowWidth - W) * x) / L;
-}
-
 /** Default leg width: 2″ in from each edge at the narrower leg, rounded down to a stock even inch. */
-export function defaultSteelLegWidth(L: number, W: number, narrowWidth: number, inset: number): number {
-  const widthAt = (x: number) => W + ((narrowWidth - W) * x) / L;
+export function defaultSteelLegWidth(widthAt: (x: number) => number, L: number, inset: number): number {
   const room = Math.min(widthAt(inset), widthAt(L - inset)) - 4;
   return Math.max(8, Math.floor(room / 2) * 2);
 }

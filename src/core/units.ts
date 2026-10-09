@@ -56,3 +56,29 @@ export function formatBoardLength(inches: number, unit: Unit): string {
 export function formatDims(t: number, w: number, l: number, unit: Unit): string {
   return `${formatLength(t, unit)} × ${formatLength(w, unit)} × ${formatLength(l, unit)}`;
 }
+
+/**
+ * Parse a length as woodworkers write it: "1.75", "1-3/4", "1 3/4", "3/4",
+ * optionally followed by ″, " or in. Returns null if it isn't a length.
+ * The number is in whatever unit the caller is working in.
+ */
+export function parseLength(text: string | number): number | null {
+  if (typeof text === 'number') return Number.isFinite(text) ? text : null;
+  const t = text.trim().replace(/(″|"|in|mm)$/i, '').trim();
+  if (!t) return null;
+  // "1-3/4" / "1 3/4" (whole + fraction), "3/4" (fraction), "1.75" (decimal)
+  const mixed = t.match(/^(\d+)(?:\s+|-)(\d+)\/(\d+)$/);
+  const frac = t.match(/^(\d+)\/(\d+)$/);
+  const dec = t.match(/^\d+(?:\.\d*)?$|^\.\d+$/);
+  if (mixed) return Number(mixed[3]) ? Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]) : null;
+  if (frac) return Number(frac[2]) ? Number(frac[1]) / Number(frac[2]) : null;
+  return dec ? Number(t) : null;
+}
+
+/** Parse a list of lengths separated by commas or semicolons. Null if any entry isn't a length. */
+export function parseLengthList(text: string | number[]): number[] | null {
+  if (Array.isArray(text)) return text.every((n) => Number.isFinite(n)) ? text : null;
+  const parts = text.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+  const out = parts.map(parseLength);
+  return out.some((n) => n === null) ? null : (out as number[]);
+}

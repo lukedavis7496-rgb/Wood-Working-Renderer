@@ -1,7 +1,7 @@
 import { SPECIES } from './species';
-import type { DefaultCtx, Finish, Joinery, NormalizedSpec, OptionField, ProjectSpec, ProjectType } from './types';
+import type { DefaultCtx, Finish, Joinery, NormalizedSpec, OptionField, OptionValue, ProjectSpec, ProjectType } from './types';
 import { FINISH_LABELS, JOINERY_LABELS } from './types';
-import { toInches, type Unit } from './units';
+import { formatLength, parseLength, parseLengthList, toInches, type Unit } from './units';
 
 export class SpecError extends Error {
   constructor(public readonly problems: string[]) {
@@ -39,8 +39,9 @@ export function resolveOptions(
   base: Omit<DefaultCtx, 'options'>,
   problems: string[],
   warnings: string[],
-): Record<string, number | string | boolean> {
-  const out: Record<string, number | string | boolean> = {};
+): Record<string, OptionValue> {
+  const out: Record<string, OptionValue> = {};
+  const fmtMin = (field: OptionField, v: number) => (field.kind === 'length' ? formatLength(v, units) : String(v));
   const known = new Set(type.options.map((f) => f.key));
   for (const key of Object.keys(raw)) {
     if (!known.has(key)) warnings.push(`Unknown ${type.label.toLowerCase()} option "${key}" ignored.`);
@@ -48,13 +49,24 @@ export function resolveOptions(
   for (const field of type.options) {
     const ctx: DefaultCtx = { ...base, options: out };
     const given = raw[field.key];
-    let value: number | string | boolean;
-    if (given === undefined || given === null || given === '') {
-      value = resolveDefault<number | string | boolean>(field.default, ctx);
+    let value: OptionValue;
+    if (given === undefined || given === null || given === '' || (Array.isArray(given) && !given.length)) {
+      value = resolveDefault<OptionValue>(field.default as OptionValue | ((c: DefaultCtx) => OptionValue), ctx);
+    } else if (field.kind === 'lengthList') {
+      const list = parseLengthList(given as string | number[]);
+      if (!list || list.some((n) => n <= 0)) {
+        problems.push(`${field.label}: enter lengths separated by commas, like 40, 38-1/2, 36.`);
+        continue;
+      }
+      if (field.minCount && list.length < field.minCount) {
+        problems.push(`${field.label}: enter at least ${field.minCount} measurements.`);
+        continue;
+      }
+      value = list.map((n) => toInches(n, units));
     } else if (field.kind === 'length' || field.kind === 'number') {
-      const n = typeof given === 'string' ? Number(given) : given;
+      const n = field.kind === 'length' ? parseLength(given as string | number) : typeof given === 'string' ? Number(given) : given;
       if (typeof n !== 'number' || !Number.isFinite(n)) {
-        problems.push(`${field.label} must be a number.`);
+        problems.push(`${field.label} must be ${field.kind === 'length' ? 'a length, like 1-3/4 or 1.75' : 'a number'}.`);
         continue;
       }
       value = field.kind === 'length' ? toInches(n, units) : n;
@@ -68,8 +80,8 @@ export function resolveOptions(
       value = given === true || given === 'true';
     }
     if ((field.kind === 'length' || field.kind === 'number') && typeof value === 'number') {
-      if (field.min !== undefined && value < field.min - 1e-9) problems.push(`${field.label} is below the minimum.`);
-      if (field.max !== undefined && value > field.max + 1e-9) problems.push(`${field.label} is above the maximum.`);
+      if (field.min !== undefined && value < field.min - 1e-9) problems.push(`${field.label} must be at least ${fmtMin(field, field.min)}.`);
+      if (field.max !== undefined && value > field.max + 1e-9) problems.push(`${field.label} can be at most ${fmtMin(field, field.max)}.`);
     }
     out[field.key] = value;
   }
@@ -110,11 +122,14 @@ export function normalizeSpec(spec: ProjectSpec, type: ProjectType): { spec: Nor
     height: toInches(d.height, units),
   };
   let options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery }, problems, warnings);
-  // Single plan dimension (round): width follows length, and defaults that
-  // depend on width are resolved again.
-  if (type.dimensionLabels?.(options).width === null && dimensions.width !== dimensions.length) {
-    dimensions.width = dimensions.length;
-    options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery }, problems, []);
+  // Some options decide the overall size (a round top's diameter, a measured
+  // slab's widest point). Apply that, then re-resolve defaults that depend on it.
+  if (type.deriveDimensions && !problems.length) {
+    const derived = type.deriveDimensions({ ...dimensions }, options);
+    if (derived.length !== dimensions.length || derived.width !== dimensions.width || derived.height !== dimensions.height) {
+      Object.assign(dimensions, derived);
+      options = resolveOptions(type, spec.options ?? {}, units, { dimensions, joinery: joinery as Joinery }, problems, []);
+    }
   }
 
   const kerf = spec.stock?.kerf !== undefined ? toInches(spec.stock.kerf, units) : DEFAULT_KERF_IN;

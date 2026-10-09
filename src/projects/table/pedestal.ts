@@ -101,6 +101,6 @@ export function pedestalSteps(spec: NormalizedSpec, layers: number, colLen: numb
     'Optionally taper or round over the foot ends, then sand all base parts to 180.',
     'Drill a 3/8″ clearance hole through each crossing and a pilot hole into the centre of each column end.',
     'Glue and lag-screw the column to the feet, then the cleats to the top of the column. Check the column is plumb both ways before the glue sets.',
-    'Drill the cleat holes for the top screws; elongate the outer ones across the top\'s grain so the top can move.',
+    'Drill the screw holes in the cleats for attaching the top (slot sizes are in the last step).',
   ];
 }

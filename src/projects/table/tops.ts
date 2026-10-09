@@ -1,6 +1,7 @@
-import { box, type Hexa, type Vec3 } from '../../core/geom';
+import { box, hexaVolume, type Hexa, type Vec3 } from '../../core/geom';
+import { getSpecies } from '../../core/species';
 import type { Assembly, NormalizedSpec, Part, Shape } from '../../core/types';
-import { fmt, opts, topThickness, wobble } from './common';
+import { fmt, hasProfile, opts, slabWidthFn, topThickness, wobble } from './common';
 
 /** Oversize for each glue-up board: trimmed off after the panel cures. */
 export const TOP_BOARD_ALLOWANCE = { length: 1, width: 1 / 4 };
@@ -10,6 +11,8 @@ export interface Top {
   assembly?: Assembly;
   /** Underside of the top, i.e. where the base ends. */
   underside: number;
+  /** For slabs: finished weight, lb. */
+  weight?: number;
 }
 
 /** Hexahedron from a corner function f(xBit, yBit, zBit). */
@@ -119,9 +122,10 @@ export function roundBoardTop(spec: NormalizedSpec): Top {
 }
 
 /**
- * A live edge slab you already own. Width tapers from the widest end to the
- * narrow end with a natural wobble along both edges, and the bark edge is
- * undercut toward the bottom face the way most slabs are.
+ * A live edge slab you already own. Its outline follows the widths you
+ * measured (or a straight taper from the widest to the narrow end), with a
+ * small natural wobble between measurements, and the bark edge is undercut
+ * toward the bottom face the way most slabs are.
  */
 export function liveEdgeSlab(spec: NormalizedSpec): Top {
   const o = opts(spec);
@@ -129,16 +133,20 @@ export function liveEdgeSlab(spec: NormalizedSpec): Top {
   const { length: L, width: W, height: H } = spec.dimensions;
   const t = topThickness(o);
   const y0 = H - t;
-  const Wn = o.narrowWidth;
-  const seed = L * 7 + W * 3 + Wn;
-  const amp = Math.min(1.5, 0.06 * W);
+  const measured = hasProfile(o);
+  const width = slabWidthFn(L, W, o);
+  const seed = L * 7 + W * 3 + o.narrowWidth;
   const undercut = Math.min(0.75, 0.3 * t);
-  const width = (x: number) => W + ((Wn - W) * x) / L;
-  // Ramp the wobble in from zero so the widest end measures exactly W.
-  const ramp = (x: number) => Math.min(1, (x / L) * 8);
-  const left = (x: number) => (W - width(x)) / 2 + amp * ramp(x) * wobble(x / L, seed);
-  const right = (x: number) => (W + width(x)) / 2 - amp * ramp(x) * wobble(x / L, seed + 1);
-  const N = 48;
+  // Wobble only ever eats inward from the nominal width, so the widest
+  // measurement stays exactly W. With measurements it's small and fades to
+  // zero at each station; without, it ramps in from the wide end.
+  const amp = measured ? Math.min(0.5, 0.015 * W) : Math.min(1.5, 0.06 * W);
+  const fade = measured
+    ? (x: number) => Math.sin((Math.PI * x * (o.widthProfile.length - 1)) / L) ** 2
+    : (x: number) => Math.min(1, (x / L) * 8);
+  const left = (x: number) => (W - width(x)) / 2 + amp * fade(x) * wobble(x / L, seed);
+  const right = (x: number) => (W + width(x)) / 2 - amp * fade(x) * wobble(x / L, seed + 1);
+  const N = measured ? Math.max(48, 12 * (o.widthProfile.length - 1)) : 48;
   const solids: Shape[] = [];
   for (let i = 0; i < N; i++) {
     const xs = [(L * i) / N, (L * (i + 1)) / N];
@@ -151,9 +159,16 @@ export function liveEdgeSlab(spec: NormalizedSpec): Top {
       }),
     });
   }
+  const volume = solids.reduce((v, s) => v + hexaVolume(s.hexa), 0);
+  const weight = (volume / 1728) * getSpecies(spec.species).densityLbPerFt3;
+  const avgWidth = volume / (L * t);
+  const roughBoardFeet = (o.slabThickness * avgWidth * o.slabLength) / 144;
   const notes = [
     `Your slab: flatten from ${f(o.slabThickness)} to ${f(t)}, trim from ${f(o.slabLength)} to ${f(L)} long.`,
-    `Width runs from ${f(W)} at the wide end to ${f(Wn)} at the narrow end.`,
+    measured
+      ? `Measured widths, end to end every ${f(L / (o.widthProfile.length - 1))}: ${o.widthProfile.map(f).join(', ')}.`
+      : `Width runs from ${f(W)} at the wide end to ${f(o.narrowWidth)} at the narrow end.`,
+    `About ${roughBoardFeet.toFixed(0)} board feet as it is now; about ${Math.round(weight)} lb finished.`,
   ];
   return {
     parts: [
@@ -170,6 +185,7 @@ export function liveEdgeSlab(spec: NormalizedSpec): Top {
       },
     ],
     underside: y0,
+    weight,
   };
 }
 
@@ -215,5 +231,6 @@ export function roundSlab(spec: NormalizedSpec): Top {
       },
     ],
     underside: y0,
+    weight: (solids.reduce((v, s) => v + hexaVolume(s.hexa), 0) / 1728) * getSpecies(spec.species).densityLbPerFt3,
   };
 }

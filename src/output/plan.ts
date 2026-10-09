@@ -1,3 +1,4 @@
+import { SEASONAL_MC_SWING } from '../core/movement';
 import { getSpecies } from '../core/species';
 import type { Model, ProjectSpec } from '../core/types';
 import { FINISH_LABELS, JOINERY_LABELS } from '../core/types';
@@ -30,7 +31,7 @@ export function plan(spec: ProjectSpec): ProjectPlan {
   const shoppingList = [
     ...owned.map((p) => `${p.name}: you have it — nothing to buy for the top.`),
     ...lumber.groups.map((g) => shoppingLine(g, u)),
-    ...priced.map((h) => `${count(h.quantity)} ${h.item.charAt(0).toLowerCase()}${h.item.slice(1)} (~$${Math.round(h.quantity * h.unitCost!)}).`),
+    ...priced.map((h) => `${count(h.quantity)} ${/^[A-Z][a-z]/.test(h.item) ? h.item.charAt(0).toLowerCase() + h.item.slice(1) : h.item} (~$${Math.round(h.quantity * h.unitCost!)}).`),
   ];
   if (!shoppingList.length) shoppingList.push('No lumber to buy.');
   const rows = cutList(model);
@@ -139,6 +140,11 @@ export function formatPlan(p: ProjectPlan): string {
   }
   if (p.hardwareCost) lines.push(`  Steel legs and priced hardware: ~$${Math.round(p.hardwareCost)}`);
   lines.push(`  Finished weight: ~${Math.round(p.weightLb)} lb`);
+  if (model.movement) {
+    lines.push(
+      `  Seasonal movement: ~${formatLength(model.movement.amount, u)} across the ${formatLength(model.movement.width, u)} top (${SEASONAL_MC_SWING}% moisture swing, flatsawn)`,
+    );
+  }
   hr();
 
   lines.push('HARDWARE');

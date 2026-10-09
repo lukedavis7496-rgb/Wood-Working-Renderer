@@ -44,7 +44,11 @@ export type OptionField =
   | (OptionBase & { kind: 'length'; default: number | ((ctx: DefaultCtx) => number); min?: number; max?: number })
   | (OptionBase & { kind: 'number'; default: number | ((ctx: DefaultCtx) => number); min?: number; max?: number; step?: number })
   | (OptionBase & { kind: 'select'; default: string | ((ctx: DefaultCtx) => string); choices: { value: string; label: string }[] })
-  | (OptionBase & { kind: 'boolean'; default: boolean | ((ctx: DefaultCtx) => boolean) });
+  | (OptionBase & { kind: 'boolean'; default: boolean | ((ctx: DefaultCtx) => boolean) })
+  /** Comma-separated lengths (e.g. widths measured along a slab); empty means "not given". */
+  | (OptionBase & { kind: 'lengthList'; default: number[]; minCount?: number; placeholder?: string });
+
+export type OptionValue = number | string | boolean | number[];
 
 interface OptionBase {
   key: string;
@@ -52,6 +56,8 @@ interface OptionBase {
   help?: string;
   /** Show near the top of forms, with the main choices (e.g. a style that changes everything else). */
   prominent?: boolean;
+  /** Form section heading this field belongs under (fields keep schema order within a section). */
+  group?: string;
   /** Only show this field in forms when the predicate holds (it still resolves to its default). */
   showIf?: (options: Record<string, unknown>, joinery: Joinery) => boolean;
 }
@@ -70,7 +76,7 @@ export interface NormalizedSpec {
   dimensions: { length: number; width: number; height: number };
   species: string;
   joinery: Joinery;
-  options: Record<string, number | string | boolean>;
+  options: Record<string, OptionValue>;
   finish: Finish;
   referenceImage?: string;
   stock: { kerf: number; overage: number };
@@ -142,6 +148,8 @@ export interface Model {
   hardware: HardwareItem[];
   assemblySteps: string[];
   warnings: string[];
+  /** Seasonal movement across the main solid-wood panel (e.g. a tabletop), inches. */
+  movement?: { width: number; amount: number; species: string };
 }
 
 export interface ProjectType {
@@ -157,6 +165,15 @@ export interface ProjectType {
    * diameter); width is then set equal to length.
    */
   dimensionLabels?: (options: Record<string, unknown>) => { length: string; width: string | null; height: string };
+  /**
+   * Adjust the overall dimensions after options resolve, when the options
+   * determine them (a round top's width is its diameter; a measured slab's
+   * width is its widest measurement). Lengths in inches.
+   */
+  deriveDimensions?: (
+    dimensions: { length: number; width: number; height: number },
+    options: Record<string, OptionValue>,
+  ) => { length: number; width: number; height: number };
   /** False when the joinery choice doesn't apply to these options (e.g. bought steel legs). */
   joineryApplies?: (options: Record<string, unknown>) => boolean;
   /** Extra validation beyond the schema; return error messages. Lengths in inches. */

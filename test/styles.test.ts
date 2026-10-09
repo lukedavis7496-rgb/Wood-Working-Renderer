@@ -141,3 +141,60 @@ describe('round table', () => {
     expect(cutSize(p.model.parts.find((x) => x.id === 'slab')!).thickness).toBeCloseTo(1.75);
   });
 });
+
+describe('measured live edge slab', () => {
+  const measured: ProjectSpec = {
+    ...liveEdge,
+    dimensions: { length: 84, width: 30, height: 30 }, // width is replaced by the widest measurement
+    options: { tableStyle: 'live-edge', widthProfile: '38-1/2, 40, 37, 35-1/2, 36, 33', slabLength: 90, slabThickness: 2.5 },
+  };
+  const p = plan(measured);
+  const slab = p.model.parts.find((x) => x.id === 'slab')!;
+
+  it('takes the overall width from the widest measurement', () => {
+    expect(p.model.spec.dimensions.width).toBe(40);
+    expect(cutSize(slab).width).toBeCloseTo(40, 6);
+  });
+
+  it('passes through every measured width at its station', () => {
+    const widths = [38.5, 40, 37, 35.5, 36, 33];
+    const step = 84 / (widths.length - 1);
+    const pts = slab.solids.flatMap((s) => s.hexa.filter((v) => v[2] > 0).map((v) => toWorld(slab.placement, v)));
+    widths.forEach((w, i) => {
+      const at = pts.filter((v) => Math.abs(v[0] + 42 - i * step) < 1e-6);
+      expect(at.length).toBeGreaterThan(0);
+      const span = Math.max(...at.map((v) => v[2])) - Math.min(...at.map((v) => v[2]));
+      expect(span).toBeCloseTo(w, 6);
+    });
+  });
+
+  it('sizes the steel legs from the measured width where they mount', () => {
+    // legs 10″ in from each end; narrowest there is near the 33″ end
+    const legs = p.model.parts.filter((x) => x.material === 'steel');
+    const w = worldBox(legs[1]).max[2] - worldBox(legs[1]).min[2];
+    expect(w).toBeLessThanOrEqual(33 - 4 + 2);
+    expect(w % 2).toBe(0);
+  });
+
+  it('rejects a measurement list it cannot read', () => {
+    expect(() => buildModel({ ...measured, options: { ...measured.options, widthProfile: '40, wide' } })).toThrow(/separated by commas/);
+  });
+});
+
+describe('wood movement', () => {
+  it('estimates seasonal movement across the top from species and width', () => {
+    const p = plan(liveEdge);
+    // 40″ walnut, tangential 0.00274 per 1% MC, 4% swing
+    expect(p.model.movement!.amount).toBeCloseTo(40 * 0.00274 * 4, 6);
+  });
+
+  it('sizes the leg screw slots for that movement', () => {
+    const steps = plan(liveEdge).model.assemblySteps.join(' ');
+    expect(steps).toMatch(/elongate the others across the grain to about 9\/16″ long/);
+  });
+
+  it('red oak moves more than cherry at the same width', () => {
+    const at = (species: string) => plan({ ...liveEdge, species }).model.movement!.amount;
+    expect(at('red-oak')).toBeGreaterThan(at('cherry'));
+  });
+});

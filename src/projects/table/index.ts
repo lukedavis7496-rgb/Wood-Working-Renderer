@@ -1,10 +1,13 @@
 import { getSpecies } from '../../core/species';
 import type { Assembly, HardwareItem, Joint, Model, NormalizedSpec, Part, ProjectType } from '../../core/types';
 import { roundToSixteenth } from '../../core/units';
+
+const roundUpSixteenth = (x: number) => Math.ceil(x * 16 - 1e-9) / 16;
 import { apronBaseSteps, buildApronBase, validateApronBase, type ApronFootprint } from './apronBase';
-import { finishStep, fmt, opts, slabPrepSteps, topThickness, usesApronBase, usesSlab, type TableOptions } from './common';
-import { buildPedestal, defaultColumnSize, defaultFootSpan, FOOT_HEIGHT, CLEAT_HEIGHT, pedestalSteps } from './pedestal';
-import { defaultSteelLegWidth, slabWidthAt, steelLegs, STEEL_LEG_LABELS } from './steelLegs';
+import { finishStep, fmt, hasProfile, opts, slabPrepSteps, slabWidthAt, slabWidthFn, topThickness, usesApronBase, usesSlab, type TableOptions } from './common';
+import { seasonalMovement, slotLength } from '../../core/movement';
+import { buildPedestal, cleatLength, defaultColumnSize, defaultFootSpan, FOOT_HEIGHT, CLEAT_HEIGHT, pedestalSteps } from './pedestal';
+import { defaultSteelLegWidth, steelLegs, STEEL_LEG_LABELS } from './steelLegs';
 import { liveEdgeSlab, rectBoardTop, roundBoardTop, roundSlab, type Top } from './tops';
 
 export { resolveTableJoinery } from './apronBase';
@@ -66,6 +69,8 @@ function buildTable(spec: NormalizedSpec): Model {
   const f = fmt(spec);
   const species = getSpecies(spec.species);
   const { length: L, width: W } = spec.dimensions;
+  const movement = seasonalMovement(species.id, W);
+  const moves = `${species.name} ${f(W)} wide moves about ${f(movement)} across its width between a dry winter and a humid summer`;
 
   let top: Top;
   if (o.tableStyle === 'live-edge') top = liveEdgeSlab(spec);
@@ -115,15 +120,22 @@ function buildTable(spec: NormalizedSpec): Model {
     hardware.push(...base.hardware);
     warnings.push(...base.warnings);
     steps.push(...apronBaseSteps(spec, base));
-    attach = `Centre the top upside-down on a blanket, set the base on it (${f(o.overhang)} overhang ${o.tableStyle === 'round' ? 'at the leg corners' : 'all round'}) and attach with the figure-8 fasteners. Don't glue the top: it must move across its width with the seasons.`;
+    attach =
+      `Centre the top upside-down on a blanket, set the base on it (${f(o.overhang)} overhang ${o.tableStyle === 'round' ? 'at the leg corners' : 'all round'}) and attach with the figure-8 fasteners. ` +
+      `Don't glue the top: ${moves}, and the fasteners pivot to let it.`;
   } else if (o.tableStyle === 'live-edge') {
     const legs = steelLegs(spec, top.underside);
     parts.push(...legs.parts);
     hardware.push(...legs.hardware);
     for (const p of legs.parts) joints.push({ kind: 'fastener', parts: [p.id, topId], description: 'screws through slotted mounting holes' });
+    // The outermost screw sits near the end of the leg's top bar (or, for
+    // hairpins, near the slab's edge); it travels the most.
+    const outer = o.steelLegStyle === 'hairpin' ? Math.max(...legs.parts.map((p) => Math.abs(p.placement.origin[2]))) + 1.5 : o.steelLegWidth / 2 - o.steelTubeSize / 2;
+    const slot = slotLength(species.id, outer, 1 / 4);
     attach =
-      `Lay the slab face down on a blanket. ${legs.notes[0]} Square each leg to the slab's centreline, mark and drill pilot holes ` +
-      '(stop well short of the top face), slot the outer holes across the grain, and screw the legs on. Level the feet if the floor needs it.';
+      `Lay the slab face down on a blanket. ${legs.notes[0]} Square each leg to the slab's centreline and mark the holes. ` +
+      `${moves}, so leave the centre hole of each leg round and elongate the others across the grain to about ${f(roundUpSixteenth(slot))} long. ` +
+      'Drill pilot holes (stop well short of the top face), centre the screws in the slots, and screw the legs on. Level the feet if the floor needs it.';
     if (o.steelLegStyle === 'hairpin' && L > 60) warnings.push('Hairpin legs flex under a long, heavy slab; U, trapezoid or X legs are steadier above 60″.');
   } else {
     const ped = buildPedestal(spec, top.underside, topId);
@@ -132,7 +144,10 @@ function buildTable(spec: NormalizedSpec): Model {
     hardware.push(...ped.hardware);
     steps.push(...pedestalSteps(spec, ped.layers, ped.colLen));
     if (o.footSpan < 0.6 * L) warnings.push(`Feet span only ${Math.round((o.footSpan / L) * 100)}% of the top; under 60% a pedestal table tips easily when leaned on.`);
-    attach = 'Centre the base upside-down on the top and screw the cleats to it through the slotted holes. No glue: the top must move with the seasons.';
+    const slot = slotLength(species.id, cleatLength(L) / 2 - 1, 0.19);
+    attach =
+      `Centre the base upside-down on the top and screw the cleats to it. ${moves}: leave the centre holes round, ` +
+      `elongate the outer holes on the cleat that runs across the grain to about ${f(roundUpSixteenth(slot))}, and centre the screws in them. No glue.`;
   }
 
   if (o.roundTop === 'boards' && o.tableStyle === 'round') {
@@ -143,8 +158,21 @@ function buildTable(spec: NormalizedSpec): Model {
   steps.push(finishStep(spec));
   steps.push(attach);
 
+  if (top.weight && top.weight > 80) {
+    warnings.push(`The slab weighs about ${Math.round(top.weight)} lb finished. Line up a helper (or a slab cart) for every flip and move.`);
+  }
+
   const ordered = top.parts[0].sourcing === 'owned' ? [...top.parts, ...parts] : [...parts, ...top.parts];
-  return { spec, parts: ordered, joints, assemblies, hardware, assemblySteps: steps, warnings };
+  return {
+    spec,
+    parts: ordered,
+    joints,
+    assemblies,
+    hardware,
+    assemblySteps: steps,
+    warnings,
+    movement: { width: W, amount: movement, species: species.id },
+  };
 }
 
 const choice = (value: string, label: string) => ({ value, label });
@@ -160,8 +188,14 @@ export const table: ProjectType = {
     o.tableStyle === 'round'
       ? { length: 'Diameter', width: null, height: 'Height' }
       : o.tableStyle === 'live-edge'
-        ? { length: 'Finished length', width: 'Slab width (widest)', height: 'Height' }
+        ? { length: 'Finished length', width: hasProfile(o as unknown as TableOptions) ? null : 'Slab width (widest)', height: 'Height' }
         : { length: 'Length', width: 'Width', height: 'Height' },
+  deriveDimensions: (d, options) => {
+    const o = options as unknown as TableOptions;
+    if (o.tableStyle === 'round') return { ...d, width: d.length };
+    if (hasProfile(o)) return { ...d, width: Math.max(...o.widthProfile) };
+    return d;
+  },
   joineryApplies: (o) => usesApronBase(o as unknown as TableOptions),
   options: [
     {
@@ -174,7 +208,7 @@ export const table: ProjectType = {
     },
     // ---- Round -------------------------------------------------------------
     {
-      key: 'roundTop',
+      key: 'roundTop', group: 'Round table',
       label: 'Round top',
       kind: 'select',
       default: 'boards',
@@ -182,7 +216,7 @@ export const table: ProjectType = {
       showIf: isRound,
     },
     {
-      key: 'roundBase',
+      key: 'roundBase', group: 'Round table',
       label: 'Base',
       kind: 'select',
       default: 'pedestal',
@@ -191,16 +225,26 @@ export const table: ProjectType = {
     },
     // ---- Slab --------------------------------------------------------------
     {
-      key: 'narrowWidth',
+      key: 'widthProfile', group: 'Your slab',
+      label: 'Widths measured along the slab',
+      kind: 'lengthList',
+      default: [],
+      minCount: 2,
+      placeholder: 'e.g. 40, 38-1/2, 37, 36, 34',
+      showIf: isLiveEdge,
+      help: 'Optional. Measure across the top face at even spacing from one end of the finished length to the other. The model, leg sizes and fit checks follow your slab.',
+    },
+    {
+      key: 'narrowWidth', group: 'Your slab',
       label: 'Slab width at narrow end',
       kind: 'length',
       default: (c) => c.dimensions.width,
       min: 6,
-      showIf: isLiveEdge,
+      showIf: (o) => isLiveEdge(o) && !hasProfile(o as unknown as TableOptions),
       help: 'Measure across the top face at the narrower end, after trimming.',
     },
     {
-      key: 'slabLength',
+      key: 'slabLength', group: 'Your slab',
       label: 'Slab length as it is now',
       kind: 'length',
       default: (c) => c.dimensions.length + 2,
@@ -208,7 +252,7 @@ export const table: ProjectType = {
       help: 'Extra length is trimmed off to square the ends.',
     },
     {
-      key: 'slabThickness',
+      key: 'slabThickness', group: 'Your slab',
       label: 'Slab thickness as it is now',
       kind: 'length',
       default: (c) => (c.dimensions.height >= 26 ? 2.25 : 2),
@@ -217,7 +261,7 @@ export const table: ProjectType = {
       showIf: slabTop,
     },
     {
-      key: 'flattenAllowance',
+      key: 'flattenAllowance', group: 'Your slab',
       label: 'Lost to flattening',
       kind: 'length',
       default: 0.25,
@@ -227,7 +271,7 @@ export const table: ProjectType = {
     },
     // ---- Steel legs --------------------------------------------------------
     {
-      key: 'steelLegStyle',
+      key: 'steelLegStyle', group: 'Steel legs',
       label: 'Steel legs',
       kind: 'select',
       default: 'u',
@@ -235,7 +279,7 @@ export const table: ProjectType = {
       showIf: isLiveEdge,
     },
     {
-      key: 'steelLegInset',
+      key: 'steelLegInset', group: 'Steel legs',
       label: 'Legs in from each end',
       kind: 'length',
       default: (c) => Math.min(12, Math.max(4, Math.round(c.dimensions.length * 0.12))),
@@ -243,17 +287,21 @@ export const table: ProjectType = {
       showIf: isLiveEdge,
     },
     {
-      key: 'steelLegWidth',
+      key: 'steelLegWidth', group: 'Steel legs',
       label: 'Steel leg width',
       kind: 'length',
       default: (c) =>
-        defaultSteelLegWidth(c.dimensions.length, c.dimensions.width, c.options.narrowWidth as number, c.options.steelLegInset as number),
+        defaultSteelLegWidth(
+          slabWidthFn(c.dimensions.length, c.dimensions.width, c.options as unknown as TableOptions),
+          c.dimensions.length,
+          c.options.steelLegInset as number,
+        ),
       min: 6,
       showIf: (o) => isLiveEdge(o) && o.steelLegStyle !== 'hairpin',
       help: 'Defaults to 2″ in from each edge at the narrower leg, in an even stock size.',
     },
     {
-      key: 'steelTubeSize',
+      key: 'steelTubeSize', group: 'Steel legs',
       label: 'Steel tube size',
       kind: 'length',
       default: 2,
@@ -263,25 +311,25 @@ export const table: ProjectType = {
     },
     // ---- Leg-and-apron base -------------------------------------------------
     {
-      key: 'legStyle',
+      key: 'legStyle', group: 'Legs & aprons',
       label: 'Leg style',
       kind: 'select',
       default: 'tapered',
       choices: [choice('straight', 'Straight (square)'), choice('tapered', 'Tapered (inside faces)')],
       showIf: apronBase,
     },
-    { key: 'legThickness', label: 'Leg thickness', kind: 'length', default: (c) => (c.dimensions.height < 22 ? 1.5 : 1.75), min: 1, max: 3.5, showIf: apronBase },
+    { key: 'legThickness', group: 'Legs & aprons', label: 'Leg thickness', kind: 'length', default: (c) => (c.dimensions.height < 22 ? 1.5 : 1.75), min: 1, max: 3.5, showIf: apronBase },
     {
-      key: 'taperFootSize',
+      key: 'taperFootSize', group: 'Legs & aprons',
       label: 'Taper: size at foot',
       kind: 'length',
       default: (c) => roundToSixteenth((c.options.legThickness as number) * 0.65),
       showIf: (o) => apronBase(o) && o.legStyle === 'tapered',
       help: 'Square size the leg tapers down to at the floor.',
     },
-    { key: 'taperStart', label: 'Taper: start below apron', kind: 'length', default: 1, min: 0, showIf: (o) => apronBase(o) && o.legStyle === 'tapered' },
+    { key: 'taperStart', group: 'Legs & aprons', label: 'Taper: start below apron', kind: 'length', default: 1, min: 0, showIf: (o) => apronBase(o) && o.legStyle === 'tapered' },
     {
-      key: 'apronInset',
+      key: 'apronInset', group: 'Legs & aprons',
       label: 'Apron inset',
       kind: 'length',
       default: 0.25,
@@ -289,10 +337,10 @@ export const table: ProjectType = {
       showIf: apronBase,
       help: "How far the apron's face is set back from the leg's outer face.",
     },
-    { key: 'apronWidth', label: 'Apron width (height)', kind: 'length', default: (c) => (c.dimensions.height >= 26 ? 4 : 3), min: 1.5, showIf: apronBase },
-    { key: 'apronThickness', label: 'Apron thickness', kind: 'length', default: 0.75, min: 0.5, max: 1.5, showIf: apronBase },
+    { key: 'apronWidth', group: 'Legs & aprons', label: 'Apron width (height)', kind: 'length', default: (c) => (c.dimensions.height >= 26 ? 4 : 3), min: 1.5, showIf: apronBase },
+    { key: 'apronThickness', group: 'Legs & aprons', label: 'Apron thickness', kind: 'length', default: 0.75, min: 0.5, max: 1.5, showIf: apronBase },
     {
-      key: 'tenonLength',
+      key: 'tenonLength', group: 'Legs & aprons',
       label: 'Preferred tenon length',
       kind: 'length',
       default: 1.25,
@@ -302,7 +350,7 @@ export const table: ProjectType = {
     },
     // ---- Board tops ----------------------------------------------------------
     {
-      key: 'topThickness',
+      key: 'topThickness', group: 'Top',
       label: 'Top thickness',
       kind: 'length',
       default: (c) => (c.dimensions.length >= 48 ? 1 : 0.75),
@@ -311,7 +359,7 @@ export const table: ProjectType = {
       showIf: (o) => !slabTop(o),
     },
     {
-      key: 'overhang',
+      key: 'overhang', group: 'Legs & aprons',
       label: 'Top overhang',
       kind: 'length',
       default: (c) => (c.options.tableStyle === 'round' ? 2 : 1),
@@ -320,7 +368,7 @@ export const table: ProjectType = {
       help: 'How far the top reaches past the legs (past the leg corners on a round table).',
     },
     {
-      key: 'maxTopBoardWidth',
+      key: 'maxTopBoardWidth', group: 'Top',
       label: 'Max top board width',
       kind: 'length',
       default: 6,
@@ -330,7 +378,7 @@ export const table: ProjectType = {
     },
     // ---- Pedestal ----------------------------------------------------------
     {
-      key: 'columnSize',
+      key: 'columnSize', group: 'Pedestal',
       label: 'Column size',
       kind: 'select',
       default: (c) => String(defaultColumnSize(c.dimensions.length)),
@@ -338,7 +386,7 @@ export const table: ProjectType = {
       showIf: (o) => isRound(o) && o.roundBase === 'pedestal',
     },
     {
-      key: 'footSpan',
+      key: 'footSpan', group: 'Pedestal',
       label: 'Foot span',
       kind: 'length',
       default: (c) => defaultFootSpan(c.dimensions.length),

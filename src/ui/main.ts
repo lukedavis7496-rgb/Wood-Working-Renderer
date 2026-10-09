@@ -268,7 +268,12 @@ function renderOutputs(p: ProjectPlan): void {
     <div class="stat"><span>Lumber to buy</span><strong>${p.lumber.groups.length ? `~${t.recommendedBoardFeet.toFixed(1)} bd ft` : 'None'}</strong>${owned ? '<small>plus your slab</small>' : ''}</div>
     <div class="stat"><span>Est. cost</span><strong>~$${Math.round(p.totalCost)}</strong>${p.hardwareCost ? `<small>incl. ~$${Math.round(p.hardwareCost)} steel legs</small>` : ''}</div>
     <div class="stat"><span>Wood pieces</span><strong>${woodPieces}</strong><small>${p.cutList.length} different</small></div>
-    <div class="stat"><span>Finished weight</span><strong>~${Math.round(p.weightLb)} lb</strong></div>`;
+    <div class="stat"><span>Finished weight</span><strong>~${Math.round(p.weightLb)} lb</strong></div>
+    ${
+      p.model.movement
+        ? `<div class="stat"><span>Seasonal movement</span><strong>~${formatLength(p.model.movement.amount, u)}</strong><small>across the ${formatLength(p.model.movement.width, u)} top</small></div>`
+        : ''
+    }`;
 
   $('#warnings').innerHTML = p.model.warnings.map((w) => `<li>${esc(w)}</li>`).join('');
   $('#warnings').hidden = !p.model.warnings.length;

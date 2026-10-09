@@ -91,8 +91,11 @@ export function cutList(model: Model): CutListRow[] {
 }
 
 const STEEL_LB_PER_FT3 = 490;
-/** Steel legs are hollow tube: roughly a quarter of the solid section is metal. */
-const TUBE_FILL = 0.25;
+/**
+ * Steel legs are hollow tube: 2″ square 11-gauge tube weighs about 2.6 lb/ft
+ * against 13.6 lb/ft for solid bar, so about a fifth of the section is metal.
+ */
+const TUBE_FILL = 0.19;
 
 /** Finished weight in pounds, wood and steel. */
 export function finishedWeight(model: Model): number {
