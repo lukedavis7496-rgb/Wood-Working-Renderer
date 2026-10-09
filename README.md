@@ -21,9 +21,11 @@ npm run build:artifact                        # single-file page (three.js from 
 - **Live edge**: your own slab on bought steel legs (U, trapezoid, X or
   hairpin). Describe the slab by its widest and narrow-end widths, or by
   widths measured along its length; the model, leg sizes and fit checks
-  follow it. The slab isn't on the lumber list; the plan covers flattening,
-  trimming and stabilising it, and sizes the slotted screw holes for
-  seasonal movement.
+  follow it. At dining height the legs default to the position that seats
+  the most people comfortably, and the 3D view shows the chairs. Butterfly
+  keys can be inlaid across checks. The slab isn't on the lumber list; the
+  plan covers flattening, trimming and stabilising it, and sizes the slotted
+  screw holes for seasonal movement.
 - **Round**: glued-up top cut to a circle (each board only as long as the
   chord it spans) or your own round slab, on a pedestal (laminated column,
   half-lapped feet and cleats) or four legs with aprons.
@@ -84,7 +86,9 @@ Legs and aprons: `legStyle` (`straight`/`tapered`), `legThickness`,
 `taperFootSize`, `taperStart`, `apronInset`, `apronWidth`, `apronThickness`,
 `tenonLength`, `overhang`. Board tops: `topThickness`, `maxTopBoardWidth`.
 Slabs: `widthProfile` (comma-separated widths, evenly spaced end to end),
-`narrowWidth`, `slabLength`, `slabThickness`, `flattenAllowance`. Steel legs:
+`narrowWidth`, `slabLength`, `slabThickness`, `flattenAllowance`. Butterfly
+keys: `butterflyCount`, `butterflyPositions` (from the first end),
+`butterflySpecies`, `butterflyLength`, `butterflyThickness`. Steel legs:
 `steelLegStyle` (`u`, `trapezoid`, `x`, `hairpin`), `steelLegInset`,
 `steelLegWidth`, `steelTubeSize`. Round: `roundTop` (`boards`/`slab`),
 `roundBase` (`pedestal`/`four-legs`), `columnSize`, `footSpan`.
@@ -137,6 +141,18 @@ one sheet splits at the middle fixed shelf.
 Handbook give the seasonal movement across a top (4% moisture swing,
 flatsawn). The app uses it to size the slots for steel-leg and cleat screws.
 
+**Chair room.** Each side diner gets 26″ of edge between the leg frames
+(24″ is the usual minimum). An end seat needs the top at least 24″ wide
+there, and 14″ of knee room before a U, trapezoid or X frame (12″ minimum),
+or room for knees between the hairpins. Frame legs stay between 4″ and a
+quarter of the length in from the ends. The default leg position seats the
+most people. On a tie it favours side seats, then more room per person, then
+legs nearer the ends. A position you choose that seats fewer gets a warning.
+
+**Butterfly keys.** Bowties with 12° sides (a 4″ key is 1-1/2″ wide at the
+ends, 5/8″ at the waist), inlaid in a matching mortise 1/16″ shallower than
+the key, so it sands flush. Keys come from an offcut.
+
 **Shelf sag.** `δ = 5wL⁴ / (384 E I)`, using each species' modulus of
 elasticity (plywood ≈ 1,000,000 psi). The limit is the common 0.02″ per
 foot. When a shelf is over, the app gives the longest span that would pass.
@@ -173,6 +189,7 @@ test/           vitest suites, including the all-combinations interference test
 
 - Cabinets (doors, drawers, overlay styles) and benches
 - Three-leg round bases (angled joinery), wood trestle bases for slabs
-- Bookmatched slabs with an epoxy river, butterfly keys as cut parts
+- Bookmatched slabs with an epoxy river
+- Butterfly keys placed off the centreline (where the check actually is)
 - Mitred tenons for longer tenons in thin legs
 - Printable cut sheets (the published page can't print or download files)
