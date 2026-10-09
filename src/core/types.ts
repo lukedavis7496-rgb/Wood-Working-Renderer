@@ -157,6 +157,10 @@ export interface Model {
   warnings: string[];
   /** Seasonal movement across the main solid-wood panel (e.g. a tabletop), inches. */
   movement?: { width: number; amount: number; species: string };
+  /** How many sit at it, for dining-height tables where the base decides that. */
+  seating?: { total: number; summary: string };
+  /** Context shown in the 3D view only (e.g. chairs), world coordinates; never cut or planned. */
+  ghosts?: { kind: 'chair'; solids: Hexa[] }[];
 }
 
 export interface ProjectType {

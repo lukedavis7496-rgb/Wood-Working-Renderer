@@ -77,6 +77,7 @@ function update(rerenderForm: boolean): void {
         showErrors(null);
         viewer.letters = current.letters;
         viewer.setModel(current.model);
+        $('#chairs-toggle').hidden = !viewer.hasGhosts;
         if (refit) {
           viewer.resetView();
           refit = false;
@@ -224,6 +225,7 @@ document.querySelectorAll<HTMLButtonElement>('.mobile-switch button').forEach((b
 $('#explode').addEventListener('input', (e) => viewer.setExplode(Number((e.target as HTMLInputElement).value) / 100));
 $('#xray').addEventListener('change', (e) => viewer.setXray((e.target as HTMLInputElement).checked));
 $('#labels').addEventListener('change', (e) => viewer.setLabels((e.target as HTMLInputElement).checked));
+$('#chairs').addEventListener('change', (e) => viewer.setGhosts((e.target as HTMLInputElement).checked));
 $('#reset-view').addEventListener('click', () => viewer.resetView());
 
 $('#reset-form').addEventListener('click', (e) =>

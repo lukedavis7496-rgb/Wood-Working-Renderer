@@ -150,6 +150,7 @@ export function formatPlan(p: ProjectPlan): string {
   }
   if (p.hardwareCost) lines.push(`  Steel legs and priced hardware: ~$${Math.round(p.hardwareCost)}`);
   lines.push(`  Finished weight: ~${Math.round(p.weightLb)} lb`);
+  if (model.seating) lines.push(`  ${model.seating.summary}`);
   if (model.movement) {
     lines.push(
       `  Seasonal movement: ~${formatLength(model.movement.amount, u)} across the ${formatLength(model.movement.width, u)} top (${SEASONAL_MC_SWING}% moisture swing, flatsawn)`,

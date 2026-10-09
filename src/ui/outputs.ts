@@ -74,6 +74,7 @@ export class Outputs {
       <div class="stat"><span>Est. cost</span><strong>~$${Math.round(p.totalCost)}</strong>${p.hardwareCost ? `<small>incl. ~$${Math.round(p.hardwareCost)} steel legs</small>` : `<small>${sheets ? 'lumber and plywood' : 'lumber'}; hardware extra</small>`}</div>
       <div class="stat"><span>Wood pieces</span><strong>${pieces}</strong><small>${p.cutList.length} different</small></div>
       <div class="stat"><span>Finished weight</span><strong>~${Math.round(p.weightLb)} lb</strong></div>
+      ${p.model.seating ? `<div class="stat"><span>Seats</span><strong>${p.model.seating.total}</strong><small>${esc(p.model.seating.summary.replace(/^Seats \d+: /, ''))}</small></div>` : ''}
       ${mv ? `<div class="stat"><span>Seasonal movement</span><strong>~${formatLength(mv.amount, u)}</strong><small>across the ${formatLength(mv.width, u)} top</small></div>` : ''}`;
     $('#warnings').innerHTML = p.model.warnings.map((w) => `<li>${esc(w)}</li>`).join('');
     $('#warnings').hidden = !p.model.warnings.length;

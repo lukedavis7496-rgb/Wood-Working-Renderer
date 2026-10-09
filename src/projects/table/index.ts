@@ -8,6 +8,7 @@ import { finishStep, fmt, hasProfile, opts, slabPrepSteps, slabWidthAt, slabWidt
 import { seasonalMovement, slotLength } from '../../core/movement';
 import { buildPedestal, cleatLength, defaultColumnSize, defaultFootSpan, FOOT_HEIGHT, CLEAT_HEIGHT, pedestalSteps } from './pedestal';
 import { defaultSteelLegWidth, HAIRPIN_EDGE_INSET, steelLegs, STEEL_LEG_LABELS } from './steelLegs';
+import { chairGhosts, DINING_HEIGHT, KNEE_ROOM_MIN, recommendedSeating, seatingFor, SEAT_WIDTH_MIN, type Seating } from './seating';
 import { liveEdgeSlab, rectBoardTop, roundBoardTop, roundSlab, type Top } from './tops';
 
 export { resolveTableJoinery } from './apronBase';
@@ -115,6 +116,8 @@ function buildTable(spec: NormalizedSpec): Model {
 
   const topId = top.parts[0].id;
   let attach: string;
+  let seating: Model['seating'];
+  let ghosts: Model['ghosts'];
 
   if (usesApronBase(o)) {
     const base = buildApronBase(spec, apronFootprint(spec));
@@ -141,6 +144,16 @@ function buildTable(spec: NormalizedSpec): Model {
       `${moves}, so leave the centre hole of each leg round and elongate the others across the grain to about ${f(roundUpSixteenth(slot))} long. ` +
       'Drill pilot holes (stop well short of the top face), centre the screws in the slots, and screw the legs on. Level the feet if the floor needs it.';
     if (o.steelLegStyle === 'hairpin' && L > 60) warnings.push('Hairpin legs flex under a long, heavy slab; U, trapezoid or X legs are steadier above 60″.');
+    if (spec.dimensions.height >= DINING_HEIGHT) {
+      const layout = seatingLayout(spec.dimensions, o);
+      const seats = seatingFor(layout, o.steelLegInset);
+      const best = recommendedSeating(layout);
+      seating = { total: seats.total, summary: describeSeating(seats, layout, f) };
+      ghosts = chairGhosts(layout, seats).map((solids) => ({ kind: 'chair' as const, solids }));
+      if (best.total > seats.total) {
+        warnings.push(`Legs ${f(o.steelLegInset)} from the ends seat ${seats.total}; ${f(best.inset)} from the ends would seat ${best.total}. ${describeSeating(best, layout, f)}`);
+      }
+    }
   } else {
     const ped = buildPedestal(spec, top.underside, topId);
     parts.push(...ped.parts);
@@ -176,7 +189,29 @@ function buildTable(spec: NormalizedSpec): Model {
     assemblySteps: steps,
     warnings,
     movement: { width: W, amount: movement, species: species.id },
+    seating,
+    ghosts,
   };
+}
+
+function seatingLayout(d: { length: number; width: number }, o: TableOptions) {
+  return { style: o.steelLegStyle, length: d.length, tube: o.steelTubeSize, widthAt: slabWidthFn(d.length, d.width, o) };
+}
+
+function describeSeating(s: Seating, l: ReturnType<typeof seatingLayout>, f: (x: number) => string): string {
+  const sides = `${s.perSide} along each side (${f(Math.floor(s.sideRoom))} each)`;
+  if (s.perEnd) {
+    const knees = l.style === 'hairpin' ? 'knees between the hairpins' : `${f(s.kneeRoom)} of knee room before the legs`;
+    return `Seats ${s.total}: ${sides} and 1 at each end (${knees}).`;
+  }
+  const endWidth = Math.min(l.widthAt(0), l.widthAt(l.length));
+  const why =
+    endWidth < SEAT_WIDTH_MIN
+      ? `the ends are under ${f(SEAT_WIDTH_MIN)} wide`
+      : l.style === 'hairpin'
+        ? 'the hairpins at each end are too close together for knees'
+        : `the legs leave ${f(Math.max(0, s.kneeRoom))} of knee room at the ends, under the ${f(KNEE_ROOM_MIN)} a chair needs`;
+  return `Seats ${s.total}: ${sides}; no end chairs, because ${why}.`;
 }
 
 const choice = (value: string, label: string) => ({ value, label });
@@ -283,12 +318,27 @@ export const table: ProjectType = {
       showIf: isLiveEdge,
     },
     {
+      key: 'steelTubeSize', group: 'Steel legs',
+      label: 'Steel tube size',
+      kind: 'length',
+      default: 2,
+      min: 0.75,
+      max: 4,
+      showIf: (o) => isLiveEdge(o) && o.steelLegStyle !== 'hairpin',
+    },
+    {
       key: 'steelLegInset', group: 'Steel legs',
       label: 'Legs in from each end',
       kind: 'length',
-      default: (c) => Math.min(12, Math.max(4, Math.round(c.dimensions.length * 0.12))),
+      // Dining height: wherever seats the most people comfortably. Lower
+      // tables have no chairs, so just a pleasing inset.
+      default: (c) =>
+        c.dimensions.height >= DINING_HEIGHT
+          ? recommendedSeating(seatingLayout(c.dimensions, c.options as unknown as TableOptions)).inset
+          : Math.min(12, Math.max(4, Math.round(c.dimensions.length * 0.12))),
       min: 0,
       showIf: isLiveEdge,
+      help: 'Measured to the centre of each leg. At dining height the default leaves room for chairs: 26″ per person along the sides and 14″ of knee room at the ends.',
     },
     {
       key: 'steelLegWidth', group: 'Steel legs',
@@ -303,15 +353,6 @@ export const table: ProjectType = {
       min: 6,
       showIf: (o) => isLiveEdge(o) && o.steelLegStyle !== 'hairpin',
       help: 'Defaults to 2″ in from each edge at the narrower leg, in an even stock size.',
-    },
-    {
-      key: 'steelTubeSize', group: 'Steel legs',
-      label: 'Steel tube size',
-      kind: 'length',
-      default: 2,
-      min: 0.75,
-      max: 4,
-      showIf: (o) => isLiveEdge(o) && o.steelLegStyle !== 'hairpin',
     },
     // ---- Leg-and-apron base -------------------------------------------------
     {

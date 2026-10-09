@@ -60,6 +60,10 @@ export class Viewer {
   private camera = new THREE.PerspectiveCamera(40, 1, 0.5, 2000);
   private controls: OrbitControls;
   private root = new THREE.Group();
+  /** Chairs and other context: drawn faintly, never picked or exploded. */
+  private ghosts = new THREE.Group();
+  private ghostMaterial = new THREE.MeshStandardMaterial({ color: '#8c939b', transparent: true, opacity: 0.3, depthWrite: false, roughness: 0.9 });
+  private ghostEdges = new THREE.LineBasicMaterial({ color: '#5b6168', transparent: true, opacity: 0.35 });
   private views: PartView[] = [];
   private cutoutMaterial = new THREE.MeshBasicMaterial({ color: '#d0452f', transparent: true, opacity: 0.55, depthWrite: false });
   private edgeMaterial = new THREE.LineBasicMaterial({ color: '#2b2118', transparent: true, opacity: 0.45 });
@@ -103,6 +107,7 @@ export class Viewer {
     fill.position.set(-80, 40, -60);
     this.scene.add(fill);
     this.scene.add(this.root);
+    this.scene.add(this.ghosts);
 
     new ResizeObserver(() => this.resize()).observe(container);
     this.renderer.domElement.addEventListener('pointermove', (e) => this.onPointer(e));
@@ -132,6 +137,15 @@ export class Viewer {
       v.tenonMaterial.dispose();
     }
     this.root.clear();
+    this.ghosts.traverse((o) => {
+      if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) o.geometry.dispose();
+    });
+    this.ghosts.clear();
+    const identity: Placement = { origin: [0, 0, 0], x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
+    for (const g of model.ghosts ?? []) {
+      const geo = hexaGeometry(g.solids, identity);
+      this.ghosts.add(new THREE.Mesh(geo, this.ghostMaterial), new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), this.ghostEdges));
+    }
     this.views = [];
     this.hovered = null;
     this.labelLayer.replaceChildren();
@@ -170,6 +184,7 @@ export class Viewer {
       this.root.add(group);
     });
     all.getCenter(this.center);
+    if (this.ghosts.visible && this.hasGhosts) all.union(new THREE.Box3().setFromObject(this.ghosts));
     this.applyModes();
     if (this.firstFit) {
       this.fit(all);
@@ -186,6 +201,15 @@ export class Viewer {
   setXray(on: boolean): void {
     this.xray = on;
     this.applyModes();
+  }
+
+  /** Whether this model has context like chairs to show. */
+  get hasGhosts(): boolean {
+    return this.ghosts.children.length > 0;
+  }
+
+  setGhosts(on: boolean): void {
+    this.ghosts.visible = on;
   }
 
   setLabels(on: boolean): void {
@@ -212,7 +236,9 @@ export class Viewer {
   }
 
   resetView(): void {
-    this.fit(new THREE.Box3().setFromObject(this.root));
+    const box = new THREE.Box3().setFromObject(this.root);
+    if (this.ghosts.visible && this.hasGhosts) box.union(new THREE.Box3().setFromObject(this.ghosts));
+    this.fit(box);
   }
 
   private applyModes(): void {
